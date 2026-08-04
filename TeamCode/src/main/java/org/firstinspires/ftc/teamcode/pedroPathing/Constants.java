@@ -3,24 +3,18 @@ package org.firstinspires.ftc.teamcode.pedroPathing;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
+import com.pedropathing.ftc.drivetrains.MecanumConstants;
+import com.pedropathing.ftc.localization.constants.TwoWheelConstants;
 import com.pedropathing.paths.PathConstraints;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 public class Constants {
-    public static FollowerConstants followerConstants = new FollowerConstants();
-
-    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
-
-    public static Follower createFollower(HardwareMap hardwareMap) {
-        return new FollowerBuilder(followerConstants, hardwareMap)
-                .pathConstraints(pathConstraints)
-                .twoWheelLocalizer(localizerConstants)
-                .build();
-    }
-
     public static FollowerConstants followerConstants = new FollowerConstants()
             .mass(12.55);
 
+    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
             .maxPower(1)
@@ -33,13 +27,6 @@ public class Constants {
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
 
-    public static Follower createFollower(HardwareMap hardwareMap) {
-        return new FollowerBuilder(followerConstants, hardwareMap)
-                .pathConstraints(pathConstraints)
-                .mecanumDrivetrain(driveConstants)
-                .build();
-    }
-
     public static TwoWheelConstants localizerConstants = new TwoWheelConstants()
             .forwardEncoder_HardwareMapName("leftFront")
             .strafeEncoder_HardwareMapName("rightRear")
@@ -51,5 +38,11 @@ public class Constants {
                     )
             );
 
-
+    public static Follower createFollower(HardwareMap hardwareMap) {
+        return new FollowerBuilder(followerConstants, hardwareMap)
+                .pathConstraints(pathConstraints)
+                .mecanumDrivetrain(driveConstants)
+                .twoWheelLocalizer(localizerConstants)
+                .build();
+    }
 }
