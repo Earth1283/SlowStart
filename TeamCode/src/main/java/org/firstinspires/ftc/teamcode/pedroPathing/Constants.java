@@ -29,7 +29,7 @@ public class Constants {
             // Robot mass in KILOGRAMS, with battery installed. Supplied by team: 12.55.
             .mass(12.55)
             // Measured by the team, Zero Power Acceleration tuners.
-            .forwardZeroPowerAcceleration(-21.624337823971498)
+            .forwardZeroPowerAcceleration(-23.69353949060179)
             .lateralZeroPowerAcceleration(-59.22595640999532);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
@@ -41,8 +41,8 @@ public class Constants {
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .xVelocity(56.1168587752145)
-            .yVelocity(63.21857121985729);
+            .xVelocity(62.91674708569144)
+            .yVelocity(79.02808674489418);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
             .forwardPodY(-5.3150)
