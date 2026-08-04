@@ -3,7 +3,8 @@ package org.firstinspires.ftc.teamcode.kernel.safety;
 public class ValueChecks {
     /*
     Pass an object into checkNotNullParameter, and it will
-    return true if it is not null, false if not null
+    return true if it is not null, false if not null.
+    Java 7 didn't add the Object feature :)
      */
     public boolean checkNullParameter(Object obj) {
         return obj != null;
