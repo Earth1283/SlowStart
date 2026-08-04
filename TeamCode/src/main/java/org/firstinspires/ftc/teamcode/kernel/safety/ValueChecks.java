@@ -6,51 +6,51 @@ public class ValueChecks {
     return true if it is not null, false if not null.
     Java 7 didn't add the Object feature :)
      */
-    public boolean checkNullParameter(Object obj) {
+    public static boolean checkNullParameter(Object obj) {
         return obj != null;
     }
 
-    public boolean checkInRange(double value, double min, double max) {
+    public static boolean checkInRange(double value, double min, double max) {
         return value >= min && value <= max;
     }
 
-    public boolean checkMotorPower(double power) {
+    public static boolean checkMotorPower(double power) {
         return checkInRange(power, -1.0, 1.0);
     }
 
-    public double clampMotorPower(double power) {
+    public static double clampMotorPower(double power) {
         return Math.max(-1.0, Math.min(1.0, power));
     }
 
-    public boolean checkFinite(double value) {
+    public static boolean checkFinite(double value) {
         return !Double.isNaN(value) && !Double.isInfinite(value);
     }
 
-    public boolean checkPositive(double value) {
+    public static boolean checkPositive(double value) {
         return value > 0;
     }
 
-    public boolean checkNonNegative(double value) {
+    public static boolean checkNonNegative(double value) {
         return value >= 0;
     }
 
-    public boolean checkNotEmpty(String value) {
+    public static boolean checkNotEmpty(String value) {
         return value != null && !value.trim().isEmpty();
     }
 
-    public boolean checkNotEmpty(Object[] array) {
+    public static boolean checkNotEmpty(Object[] array) {
         return array != null && array.length > 0;
     }
 
-    public boolean checkServoPosition(double position) {
+    public static boolean checkServoPosition(double position) {
         return checkInRange(position, 0.0, 1.0);
     }
 
-    public double clampServoPosition(double position) {
+    public static double clampServoPosition(double position) {
         return Math.max(0.0, Math.min(1.0, position));
     }
 
-    public int normalizeAngle(int angle) {
+    public static int normalizeAngle(int angle) {
         int normalized = angle % 360;
         normalized = (normalized + 360) % 360;
         if (normalized > 180) {
@@ -59,7 +59,7 @@ public class ValueChecks {
         return normalized;
     }
 
-    public double normalizeAngle(double angle) {
+    public static double normalizeAngle(double angle) {
         double normalized = angle % 360;
         normalized = (normalized + 360) % 360; // Force to [0, 360)
         if (normalized > 180) {
