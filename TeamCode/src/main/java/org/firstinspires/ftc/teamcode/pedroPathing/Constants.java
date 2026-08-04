@@ -32,92 +32,33 @@ public class Constants {
             .forwardZeroPowerAcceleration(-21.624337823971498)
             .lateralZeroPowerAcceleration(-59.22595640999532);
 
-    // ---------------------------------------------------------------------
-    // STILL NOT TUNED -- deliberately omitted so Pedro's own library defaults
-    // apply, rather than shipping invented numbers:
-    //
-    //   .translationalPIDFCoefficients(...)  <- Translational PIDF tuner
-    //   .headingPIDFCoefficients(...)        <- Heading PIDF tuner
-    //   .drivePIDFCoefficients(...)          <- Drive PIDF tuner
-    //   .centripetalScaling(...)             <- Centripetal tuner
-    //
-    // See library-docs/pedro-pathing/pidf-tuning.md for the order to run them
-    // in. Full worked example: examples.md "Example Constants".
-    // ---------------------------------------------------------------------
-
     public static MecanumConstants driveConstants = new MecanumConstants()
             .leftFrontMotorName("lf")
             .leftRearMotorName("lb")
             .rightFrontMotorName("rf")
             .rightRearMotorName("rb")
-            // Team chose the standard mecanum wiring: both left motors reversed.
-            // Verify on-robot with the Tuning OpMode > Localization > Motor Directions test
-            // before trusting an auto run (troubleshooting.md: wrong motor association is
-            // the usual cause of "robot turns 180 and oscillates").
             .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD)
-            // Measured by the team, Forward/Lateral Velocity tuners.
-            //
-            // WARNING: yVelocity > xVelocity means this robot strafes FASTER than it
-            // drives forward, which is backwards for a mecanum drivetrain (strafing
-            // loses ~20-30% to roller slip). These were measured while the forward
-            // encoder was still inverted, which is the likely cause. RE-RUN the Forward
-            // Velocity and Forward Zero Power Accel tuners now that the encoder is
-            // flipped, and replace both numbers if they move.
             .xVelocity(56.1168587752145)
             .yVelocity(63.21857121985729);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
-<<<<<<< HEAD
-            .forwardPodY(-5)
-            .strafePodX(0.5)
-            .distanceUnit(DistanceUnit.INCH)
-            .hardwareMapName("pinpoint")
-            .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
-            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-=======
-            // Team measured 13.5 cm, forward pod RIGHT of the center of rotation.
-            // Pedro's frame is +X forward / +Y left, so right-of-center is negative.
-            // 13.5 cm / 2.54 = 5.3150 in.
             .forwardPodY(-5.3150)
-            // Team reported the strafe pod level with the center of rotation (its 12.5 cm
-            // is a purely sideways offset, which Pedro does not use for this pod).
             .strafePodX(0.0)
             .distanceUnit(DistanceUnit.INCH)
-            // Pinpoint device name in the robot configuration.
-            //
-            // On Control Hub I2C BUS 0 -- confirmed by the team, and working. Pedro's docs
-            // warn against bus 0 because the Control Hub's internal IMU lives there, but
-            // .pinpointLocalizer never opens that IMU, so in this configuration nothing is
-            // contending for the bus.
-            //
-            // THAT STOPS BEING TRUE the moment any code instantiates the built-in IMU
-            // (an IMU-based localizer, a heading-reset helper, a leftover teleop). If
-            // localization suddenly goes bad after adding code, check for that first --
-            // a bus conflict reads exactly like wrong pod offsets.
             .hardwareMapName("pp")
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            // Forward encoder REVERSED: the team ran Localization Test and X moved the
-            // wrong way when pushing the robot forward. Strafe was correct, left as-is.
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
-            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
+            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
-    // tValueConstraint, velocityConstraint, translationalConstraint, headingConstraint
-    // -- the starting values from the Pedro constants docs page.
     public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
->>>>>>> refs/remotes/origin/master
-
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
                 .mecanumDrivetrain(driveConstants)
                 .pinpointLocalizer(localizerConstants)
-<<<<<<< HEAD
-=======
                 .pathConstraints(pathConstraints)
->>>>>>> refs/remotes/origin/master
                 .build();
     }
 }
