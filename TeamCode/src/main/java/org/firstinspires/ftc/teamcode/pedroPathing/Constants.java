@@ -44,7 +44,7 @@ public class Constants {
             100,
             1,
             1
-            ); // nice styling
+    ); // nice styling
 
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
