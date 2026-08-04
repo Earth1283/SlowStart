@@ -21,7 +21,7 @@ apply plugin: 'com.android.application'
 
 android {
 
-    compileSdk 34
+    compileSdkVersion 29
 
     signingConfigs {
         release {
@@ -45,6 +45,10 @@ android {
             storeFile rootProject.file('libs/ftc.debug.keystore')
             storePassword 'android'
         }
+    }
+
+    aaptOptions {
+        noCompress "tflite"
     }
 
     defaultConfig {
@@ -83,6 +87,7 @@ android {
         versionName vName
     }
 
+    // Advanced user code might just want to use Vuforia directly, so we set up the libs as needed
     // http://google.github.io/android-gradle-dsl/current/com.android.build.gradle.internal.dsl.BuildType.html
     buildTypes {
         release {
@@ -108,6 +113,10 @@ android {
 
     packagingOptions {
         pickFirst '**/*.so'
+    }
+    sourceSets.main {
+        jni.srcDirs = []
+        jniLibs.srcDir rootProject.file('libs')
     }
     ndkVersion '21.3.6528147'
 }
