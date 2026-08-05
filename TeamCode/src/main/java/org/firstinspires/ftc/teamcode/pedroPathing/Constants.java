@@ -118,7 +118,14 @@ public class Constants {
             // earlier pair had lateral FASTER than forward, which is physically
             // impossible and meant the encoder directions were still wrong.
             .xVelocity(80.85435906357654)
-            .yVelocity(63.44764192836492);
+            .yVelocity(63.44764192836492)
+            // Scales motor output by nominalVoltage / measuredVoltage every loop, so path
+            // following behaves the same on a tired pack as on a fresh one. Without it the
+            // robot follows correctly at 13.5 V and undershoots at 11.5 V -- the classic
+            // "worked all practice, missed in match 5" failure. 19859 runs this too.
+            // There is also .nominalVoltage(double) if the default reference needs changing.
+            .useVoltageCompensation(true)
+            .maxPower(1);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
             .forwardPodY(-5.3150)
@@ -129,12 +136,32 @@ public class Constants {
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
+    // Expanded from the 4-argument form to the 8-argument one ONLY to reach
+    // brakingStrength. The 4-arg constructor forwards to this exact 8-arg call with
+    // velocity=0.1, translational=0.1, heading=0.007, searchLimit=10 -- verified by
+    // decompiling PathConstraints in core-2.1.2 -- so every value below except
+    // brakingStrength is byte-for-byte what the old 4-arg line already produced.
+    //
+    // brakingStrength lowered 1.0 -> 0.8 to soften the stop. The robot rotates slightly
+    // LEFT every time it brakes; Pedro's own troubleshooting page names brakingStrength
+    // as the lever for rough braking. Softer deceleration gives the heading loop time to
+    // hold angle through the transient instead of being outrun by it.
+    //
+    // IF THE LEFT KICK SURVIVES THIS, it is not a braking-strength problem:
+    //   - a CONSISTENT one-direction kick points at asymmetry, not tuning -- check for a
+    //     dragging wheel, uneven compression, or one motor with a weaker brake
+    //   - or the heading P (1.5) is too low to correct during deceleration; it was cut
+    //     from 19859's 2.4935 to stop a wobble, and may now be under-damped the other way
     public static PathConstraints pathConstraints = new PathConstraints(
-            0.99,
-            100,
-            1,
-            1
-    ); // nice styling
+            0.99,   // tValueConstraint
+            0.1,    // velocityConstraint      (4-arg default)
+            0.1,    // translationalConstraint (4-arg default)
+            0.007,  // headingConstraint       (4-arg default)
+            100,    // timeoutConstraint
+            0.8,    // brakingStrength         (was 1)
+            10,     // BEZIER_CURVE_SEARCH_LIMIT (4-arg default, leave at 10)
+            1       // brakingStart
+    );
 
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
