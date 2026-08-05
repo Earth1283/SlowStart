@@ -11,16 +11,13 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.DualServoGate;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.RollerIntake;
 import org.firstinspires.ftc.teamcode.mechanisms.shooter.DualFlywheelShooter;
-import org.firstinspires.ftc.teamcode.mechanisms.shooter.Shooter;
 import org.firstinspires.ftc.teamcode.mechanisms.turret.MultiAxisTurret;
-import org.firstinspires.ftc.teamcode.mechanisms.turret.Turret;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Autonomous(name = "32008 Blue Far Auto", group = "32008")
@@ -40,6 +37,7 @@ public class BlueFarAuto extends OpMode {
     public static double PATH_TIMEOUT = 6.0;
     public static double SPINUP_TIMEOUT = 2.5;
     public static double PARK_DEADLINE = 25.0;
+    public static double TURRET_SETTLE_SECONDS = 0.35;
 
     private enum State {
         DRIVE_TO_SHOOT_1, SHOOT_1,
@@ -51,20 +49,22 @@ public class BlueFarAuto extends OpMode {
     private Follower follower;
     private TelemetryManager panelsTelemetry;
 
-    private final Shooter shooter = new DualFlywheelShooter();
-    private final Intake  intake  = new RollerIntake();
-    private final Gate    gate    = new DualServoGate();
-    private final Turret  turret  = new MultiAxisTurret();
+    private final DualFlywheelShooter shooter = new DualFlywheelShooter();
+    private final Intake intake = new RollerIntake();
+    private final Gate   gate   = new DualServoGate();
+    private final MultiAxisTurret turret = new MultiAxisTurret();
 
     private PathChain toShoot, pickup1, toShoot1, pickup2, toShoot2, park;
 
     private State state = State.DRIVE_TO_SHOOT_1;
     private final Timer stateTimer = new Timer();
     private final Timer opmodeTimer = new Timer();
-
-    private boolean feeding = false;
     private final Timer feedTimer = new Timer();
+
+    private boolean aimed = false;
+    private boolean feeding = false;
     private String lastTransition = "none";
+    private double aimDistance = 0, aimTurretDeg = 0, aimVelocity = 0, aimHood = 0;
 
     @Override
     public void init() {
@@ -77,16 +77,18 @@ public class BlueFarAuto extends OpMode {
         intake.init(hardwareMap);
         gate.init(hardwareMap);
         turret.init(hardwareMap);
+        gate.close();
 
         buildPaths();
 
         panelsTelemetry.debug("Status", "Initialized -- BLUE FAR");
         panelsTelemetry.update(telemetry);
     }
+
     @Override
     public void init_loop() {
         follower.update();
-        panelsTelemetry.debug("Status", "Ready -- place robot on the LAUNCH LINE");
+        panelsTelemetry.debug("Status", "Ready -- park turret, place robot on LAUNCH LINE");
         panelsTelemetry.debug("X", follower.getPose().getX());
         panelsTelemetry.debug("Y", follower.getPose().getY());
         panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
@@ -131,15 +133,12 @@ public class BlueFarAuto extends OpMode {
 
     @Override
     public void start() {
-        // Defect 1: followPath() does not do this, and a tuning OpMode may have
-        // switched the PIDFs off. Without it the robot accepts paths and sits still.
+        // followPath() does NOT activate the PIDFs, and a tuning OpMode may have
+        // switched them off. Without this the robot accepts paths and sits still.
         follower.activateAllPIDFs();
 
-        turret.setSetpoint(robotConstants.TURRET_PARK_YAW_DEG,
-                           robotConstants.TURRET_PARK_PITCH_PERCENT);
-
-        // Spin up on the way to the first shot rather than after arriving.
-        shooter.setTargetVelocity(panelConstants.SHOOTER_TARGET_TICKS_PER_SEC);
+        // Idle the flywheel on the way out so the first shot spins up fast.
+        shooter.hold();
 
         opmodeTimer.resetTimer();
         follower.followPath(toShoot, true);
@@ -151,9 +150,6 @@ public class BlueFarAuto extends OpMode {
         follower.update();
         turret.update();
 
-        // Global deadline. Whatever is happening, get to the park attempt with
-        // enough time left to finish it -- parking is worth real points and a
-        // frozen state machine cannot claim them.
         if (opmodeTimer.getElapsedTimeSeconds() > PARK_DEADLINE
                 && state != State.PARK && state != State.DONE) {
             abortToPark();
@@ -172,11 +168,33 @@ public class BlueFarAuto extends OpMode {
     }
 
     /**
-     * True once the current path is done, stuck, or has taken too long.
+     * Solves aim from the robot's ACTUAL pose and commands shooter + turret.
      *
-     * Three-way like 19859's FollowPathCommand.isFinished(), plus a timeout.
-     * isBusy() alone hangs forever on a robot pinned against a wall.
+     * Uses V2's own cubic fits, so this is the same model the verified robot
+     * shoots with -- not an approximation of it.
      */
+    private void aimAtGoal() {
+        Pose p = follower.getPose();
+        double dx = robotConstants.BLUE_TARGET_X - p.getX();
+        double dy = robotConstants.BLUE_TARGET_Y - p.getY();
+
+        aimDistance = Math.hypot(dx, dy);
+        double bearingDeg = Math.toDegrees(Math.atan2(dy, dx));
+        double headingDeg = Math.toDegrees(p.getHeading());
+
+        double rel = bearingDeg - headingDeg;
+        while (rel > 180.0)  rel -= 360.0;
+        while (rel < -180.0) rel += 360.0;
+        aimTurretDeg = rel;
+
+        aimVelocity = robotConstants.velocityForDistance(aimDistance);
+        aimHood     = robotConstants.hoodPercentForDistance(aimDistance);
+
+        shooter.setTargetVelocity(aimVelocity);
+        turret.setSetpoint(aimTurretDeg, aimHood);
+    }
+
+    /** Path is done, stuck, or has taken too long. isBusy() alone hangs on a pinned robot. */
     private boolean pathDone() {
         if (follower.isRobotStuck()) {
             lastTransition = "path ended: ROBOT STUCK";
@@ -193,13 +211,44 @@ public class BlueFarAuto extends OpMode {
         return false;
     }
 
+    private boolean shotComplete() {
+        if (!aimed) {
+            aimAtGoal();
+            aimed = true;
+            return false;
+        }
+
+        if (!feeding) {
+            boolean turretReady = stateTimer.getElapsedTimeSeconds() > TURRET_SETTLE_SECONDS;
+            boolean atSpeed = shooter.atTargetVelocity();
+            boolean waited = stateTimer.getElapsedTimeSeconds() > SPINUP_TIMEOUT;
+
+            if ((turretReady && atSpeed) || waited) {
+                gate.open();
+                intake.fire();
+                feeding = true;
+                feedTimer.resetTimer();
+                lastTransition = atSpeed ? "fired: at speed" : "fired: SPINUP TIMEOUT";
+            }
+            return false;
+        }
+
+        if (feedTimer.getElapsedTimeSeconds() > robotConstants.GATE_FEED_SECONDS) {
+            gate.close();
+            intake.stop();
+            shooter.hold();
+            feeding = false;
+            aimed = false;
+            return true;
+        }
+        return false;
+    }
+
     private void runStateMachine() {
         switch (state) {
 
             case DRIVE_TO_SHOOT_1:
-                if (pathDone()) {
-                    beginShot(State.SHOOT_1);
-                }
+                if (pathDone()) setState(State.SHOOT_1, "arrived: shoot 1");
                 break;
 
             case SHOOT_1:
@@ -219,9 +268,7 @@ public class BlueFarAuto extends OpMode {
                 break;
 
             case DRIVE_TO_SHOOT_2:
-                if (pathDone()) {
-                    beginShot(State.SHOOT_2);
-                }
+                if (pathDone()) setState(State.SHOOT_2, "arrived: shoot 2");
                 break;
 
             case SHOOT_2:
@@ -241,9 +288,7 @@ public class BlueFarAuto extends OpMode {
                 break;
 
             case DRIVE_TO_SHOOT_3:
-                if (pathDone()) {
-                    beginShot(State.SHOOT_3);
-                }
+                if (pathDone()) setState(State.SHOOT_3, "arrived: shoot 3");
                 break;
 
             case SHOOT_3:
@@ -256,9 +301,7 @@ public class BlueFarAuto extends OpMode {
                 break;
 
             case PARK:
-                if (pathDone()) {
-                    setState(State.DONE, "parked");
-                }
+                if (pathDone()) setState(State.DONE, "parked");
                 break;
 
             case DONE:
@@ -267,44 +310,12 @@ public class BlueFarAuto extends OpMode {
         }
     }
 
-    private void beginShot(State shotState) {
-        feeding = false;
-        setState(shotState, "arrived at shoot pose");
-    }
-
-    /**
-     * Runs one volley and reports when it is finished.
-     *
-     * Waits for the flywheel, but ONLY up to SPINUP_TIMEOUT -- then it fires
-     * regardless. A shot at slightly-low speed may miss; a shot that never
-     * happens guarantees the rest of the auto never happens either.
-     */
-    private boolean shotComplete() {
-        if (!feeding) {
-            boolean atSpeed = shooter.atTargetVelocity();
-            boolean waitedLongEnough = stateTimer.getElapsedTimeSeconds() > SPINUP_TIMEOUT;
-            if (atSpeed || waitedLongEnough) {
-                gate.open();
-                feeding = true;
-                feedTimer.resetTimer();
-                lastTransition = atSpeed ? "fired: at speed" : "fired: SPINUP TIMEOUT";
-            }
-            return false;
-        }
-
-        if (feedTimer.getElapsedTimeSeconds() > robotConstants.GATE_FEED_SECONDS) {
-            gate.close();
-            feeding = false;
-            return true;
-        }
-        return false;
-    }
-
-    /** Global-deadline escape: stop everything scoring-related and run the park path. */
     private void abortToPark() {
         gate.close();
         shooter.stop();
         intake.stop();
+        feeding = false;
+        aimed = false;
         follower.followPath(park, true);
         setState(State.PARK, "ABORT: park deadline reached");
     }
@@ -325,10 +336,14 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
         panelsTelemetry.debug("Follower busy", follower.isBusy());
         panelsTelemetry.debug("Robot stuck", follower.isRobotStuck());
+        panelsTelemetry.debug("Aim distance (in)", aimDistance);
+        panelsTelemetry.debug("Aim turret (deg)", aimTurretDeg);
+        panelsTelemetry.debug("Aim velocity", aimVelocity);
+        panelsTelemetry.debug("Aim hood", aimHood);
+        panelsTelemetry.debug("Turret actual (deg)", turret.getYawDegrees());
         panelsTelemetry.debug("Shooter ticks/sec", shooter.getCurrentVelocity());
         panelsTelemetry.debug("Shooter at speed", shooter.atTargetVelocity());
         panelsTelemetry.debug("Gate open", gate.isOpen());
-        panelsTelemetry.debug("Turret yaw (deg)", turret.getYawDegrees());
         panelsTelemetry.update(telemetry);
     }
 }

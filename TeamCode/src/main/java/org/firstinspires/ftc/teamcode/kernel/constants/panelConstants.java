@@ -13,7 +13,5 @@ public class panelConstants {
     public static long HOLD_MS = 380;
 
     public static double VELOCITY_TOR = 20;
-    public static double INTAKE_POWER = 1;
-
-    public static double SHOOTER_TARGET_TICKS_PER_SEC = 1453.0;
+    public static double INTAKE_POWER = 0.8;
 }
