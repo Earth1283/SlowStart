@@ -25,7 +25,6 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    // ---- Field poses, from the team's supplied path (inches, Pedro frame) ----
     private static final Pose START_POSE    = new Pose(55.790,  8.210, Math.toRadians(90));
     private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
     private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
@@ -36,12 +35,8 @@ public class BlueFarAuto extends OpMode {
     private static final Pose SHOOT_3_POSE  = new Pose(67.119, 19.121, Math.toRadians(120));
     private static final Pose PARK_POSE     = new Pose(57.735, 26.906, Math.toRadians(120));
 
-    // ---- Timeouts, all seconds. Every one of these exists to stop a hang. ----
-    /** Longest a single path may run before the auto gives up and moves on. */
     public static double PATH_TIMEOUT = 6.0;
-    /** Longest to wait for the flywheel before firing anyway. */
     public static double SPINUP_TIMEOUT = 2.5;
-    /** Hard deadline: at this point the auto abandons whatever it is doing and parks. */
     public static double PARK_DEADLINE = 25.0;
 
     private enum State {
@@ -65,10 +60,8 @@ public class BlueFarAuto extends OpMode {
     private final Timer stateTimer = new Timer();
     private final Timer opmodeTimer = new Timer();
 
-    /** Set once the gates have opened for the current shot, so feed time is measured from there. */
     private boolean feeding = false;
     private final Timer feedTimer = new Timer();
-    /** Last reason the state machine advanced -- surfaced on telemetry for debugging. */
     private String lastTransition = "none";
 
     @Override
@@ -88,12 +81,6 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.debug("Status", "Initialized -- BLUE FAR");
         panelsTelemetry.update(telemetry);
     }
-
-    /**
-     * Keeps the localizer ticking before START. Pedro needs this to have a live,
-     * settled pose the moment the match begins -- and it lets the drive team see
-     * the pose on Panels while placing the robot.
-     */
     @Override
     public void init_loop() {
         follower.update();
