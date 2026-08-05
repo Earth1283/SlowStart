@@ -20,68 +20,25 @@ import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 
-/**
- * Team 32008 -- DECODE 2025-26 -- BLUE FAR autonomous.
- *
- * 32008's own subsystems, copied verbatim into teamcode/subsystems:
- * {@link AutoAimSubsystem} (turret + hood + shot solve), {@link Shooter}
- * (flywheels), {@link Intake} (roller + both gates). Only the PATH is this
- * team's own.
- *
- * WHY AUTOAIM INSTEAD OF A FIXED DISTANCE
- * ---------------------------------------
- * The previous version commanded autoConstants.FAR_FIRE_DISTANCE = 126.5 for
- * every shot. Two problems, both of which showed up on the field:
- *
- *   1. FAR_FIRE_DISTANCE and FAR_HOLD_DISTANCE are BOTH 126.5, so `distance`
- *      never changed and the hood was pinned at one position all match -- the
- *      "hood doesn't move" symptom. It was being commanded; it just had nothing
- *      to move to.
- *   2. 126.5 is a number 32008 hand-tuned for their own shot. This path's shoot
- *      pose is 134.95 in from the goal, so firing it as 126.5 under-speeds the
- *      flywheel by ~3% and the shot lands short.
- *
- * AutoAim solves range from the live pose every loop and feeds both the flywheel
- * and the hood from it, so neither number has to be guessed.
- *
- * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The gate and intake run on plain
- * timers, and the flywheel is commanded every loop with a shooterHold() fallback.
- * An earlier version made the gate wait for aim lock, and one bad solve silently
- * killed the shooter, hood, gate and intake together.
- *
- * FIELD FRAME: the kernel states goals in the PINPOINT frame (pinX = pedroY,
- * pinY = 144 - pedroX, per V2 tests/AASSTEST.java:59). Converted to Pedro below.
- * Blue is (8, 136); (136, 136) is the RED goal.
- */
 @Autonomous(name = "32008 Blue Far Auto", group = "32008")
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    // 32008's start POSITION, this path's own start HEADING (90 deg).
-    // Their 180 deg belongs to their path; mixing it in here rotates Pedro's whole
-    // field frame 90 deg from reality and the robot drives sideways/backwards.
-    private static final Pose START_POSE = new Pose(
-            autoConstants.BLUE_FAR_START.getX(),
-            autoConstants.BLUE_FAR_START.getY(),
-            Math.toRadians(90));
-    private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
-    private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
-    private static final Pose PICKUP_1_POSE = new Pose(11.004, 34.805, Math.toRadians(180));
-    private static final Pose SHOOT_2_POSE  = new Pose(67.108, 19.091, Math.toRadians(120));
-    private static final Pose MID_2_POSE    = new Pose(48.862, 59.883, Math.toRadians(180));
-    private static final Pose PICKUP_2_POSE = new Pose(14.918, 58.551, Math.toRadians(180));
-    private static final Pose SHOOT_3_POSE  = new Pose(67.119, 19.121, Math.toRadians(120));
-    private static final Pose PARK_POSE     = new Pose(57.735, 26.906, Math.toRadians(120));
+    private static final Pose START_POSE    = new Pose(56.0, 8.0, Math.toRadians(90));
+    private static final Pose SHOOT_POSE    = new Pose(63.500, 16.0, Math.toRadians(120));
+    private static final Pose MID_1_POSE    = new Pose(43.063, 35.191, Math.toRadians(180));
+    private static final Pose PICKUP_1_POSE = new Pose(13.929, 34.776, Math.toRadians(180));
+    private static final Pose SHOOT_2_POSE  = new Pose(63.500, 16.0, Math.toRadians(120));
+    private static final Pose MID_2_POSE    = new Pose(37.616, 59.019, Math.toRadians(180));
+    private static final Pose PICKUP_2_POSE = new Pose(12.968, 59.063, Math.toRadians(180));
+    private static final Pose SHOOT_3_POSE  = new Pose(63.500, 16.0, Math.toRadians(120));
+    private static final Pose MID_3_POSE    = new Pose(37.387, 82.419, Math.toRadians(180));
+    private static final Pose PICKUP_3_POSE = new Pose(13.053, 82.736, Math.toRadians(180));
+    private static final Pose SHOOT_4_POSE  = new Pose(63.500, 16.0, Math.toRadians(120));
+    private static final Pose PARK_POSE     = new Pose(63.500, 16.0, Math.toRadians(120));
 
-    /** BLUE goal, PEDRO frame. Must read 8 / 136 -- 136 / 136 is the RED goal. */
     public static double BLUE_GOAL_X = 144.0 - robotConstants.BLUE_TARGET_Y;
     public static double BLUE_GOAL_Y = robotConstants.BLUE_TARGET_X;
-
-    /**
-     * Turret mounting trim, degrees, passed straight to AutoAim's yawOffset.
-     * Their own verified angles sit ~2.2 deg off the pure geometric solve, well
-     * inside the 5 deg lock tolerance at this range, so 0 is the honest default.
-     */
     public static double YAW_OFFSET = 0.0;
 
     // Their timings, unchanged. AUTO_FAR_WAIT_FOR_SHOOT is 400 ms in the kernel;
@@ -98,6 +55,7 @@ public class BlueFarAuto extends OpMode {
         DRIVE_TO_SHOOT_1, SHOOT_1,
         DRIVE_PICKUP_1,   DRIVE_TO_SHOOT_2, SHOOT_2,
         DRIVE_PICKUP_2,   DRIVE_TO_SHOOT_3, SHOOT_3,
+        DRIVE_PICKUP_3,   DRIVE_TO_SHOOT_4, SHOOT_4,
         PARK, DONE
     }
 
@@ -112,7 +70,7 @@ public class BlueFarAuto extends OpMode {
 
     private AutoAimSubsystem.TurretCommand aim = new AutoAimSubsystem.TurretCommand();
 
-    private PathChain pickup1, pickup2, park;
+    private PathChain pickup1, pickup2, pickup3, park;
 
     private State state = State.DRIVE_TO_SHOOT_1;
     private final Timer stateTimer = new Timer();
@@ -178,8 +136,15 @@ public class BlueFarAuto extends OpMode {
                 .setTangentHeadingInterpolation()
                 .build();
 
+        pickup3 = follower.pathBuilder()
+                .addPath(new BezierLine(SHOOT_3_POSE, MID_3_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(180))
+                .addPath(new BezierLine(MID_3_POSE, PICKUP_3_POSE))
+                .setTangentHeadingInterpolation()
+                .build();
+
         park = follower.pathBuilder()
-                .addPath(new BezierLine(SHOOT_3_POSE, PARK_POSE))
+                .addPath(new BezierLine(SHOOT_4_POSE, PARK_POSE))
                 .setTangentHeadingInterpolation()
                 .build();
     }
@@ -375,9 +340,29 @@ public class BlueFarAuto extends OpMode {
 
             case SHOOT_3:
                 if (shotComplete()) {
+                    intake.intakeIn();
+                    follower.followPath(pickup3, true);
+                    setState(State.DRIVE_PICKUP_3, "shot 3 done");
+                }
+                break;
+
+            case DRIVE_PICKUP_3:
+                if (pathDone()) {
+                    intake.intakeStop();
+                    goTo.goTo(PICKUP_3_POSE, SHOOT_4_POSE);
+                    setState(State.DRIVE_TO_SHOOT_4, "pickup 3 done");
+                }
+                break;
+
+            case DRIVE_TO_SHOOT_4:
+                if (pathDone()) setState(State.SHOOT_4, "arrived: shoot 4");
+                break;
+
+            case SHOOT_4:
+                if (shotComplete()) {
                     intake.intakeStop();
                     follower.followPath(park, true);
-                    setState(State.PARK, "shot 3 done");
+                    setState(State.PARK, "shot 4 done");
                 }
                 break;
 
