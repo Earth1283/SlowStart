@@ -14,53 +14,13 @@ import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 
-/**
- * Team 32008 -- DECODE 2025-26 -- driver-controlled period, both alliances.
- *
- * Same architecture as the auto: 32008's own {@link AutoAimSubsystem},
- * {@link Shooter} and {@link Intake}, copied verbatim, with the turret solving
- * from the live pose every loop. Control layout follows their competition
- * teleop (V2 tests/A_1_AA_AS.java and tests/AASSTEST.java).
- *
- * LOCALIZATION: Pedro's follower, not a raw Pinpoint. 32008's teleop drives the
- * Pinpoint directly and converts frames at every call site; here the auto and the
- * teleop share one follower configuration, so the pose that comes out of auto
- * goes straight in with no conversion and no chance of getting the transform
- * backwards.
- *
- * POSE HANDOFF: seeded from kernel robotConstants.autoEndX/Y/H, which the auto
- * writes every loop. Those are static and survive between OpModes -- so if you
- * run TeleOp WITHOUT running auto first, they hold whatever the last run left.
- * The init screen shows the seeded pose; OPTIONS re-seeds to a known corner.
- *
- * MECHANISMS ARE NOT GATED ON THE AIM SOLVE, same rule as the auto. Drive,
- * intake and gate work whether or not the turret has a solution.
- *
- * CONTROLS -- gamepad 1
- *   left stick            drive (field centric by default)
- *   right stick X         turn
- *   left bumper           TOGGLE aim + shooter
- *   right bumper (hold)   FIRE -- feeds at the distance-scaled intake power
- *   right trigger         intake in  (cancels aim mode)
- *   left trigger          intake out, proportional to the trigger
- *   A                     hold for slow mode
- *   B                     toggle field centric / robot centric
- *   OPTIONS               re-seed pose to RESEED_POSE (localization recovery)
- *   dpad up / down        shot distance trim  +/- 2 in
- *   dpad left / right     turret trim         +/- 1 deg
- *
- * CONTROLS -- gamepad 2 (same trims, plus)
- *   left bumper           toggle auto turret / manual (turret parks straight)
- */
 @Configurable
 public abstract class AutoAimTeleOp extends OpMode {
 
-    /** Goal for this alliance, PEDRO frame. */
     protected abstract double goalX();
     protected abstract double goalY();
     protected abstract String allianceName();
 
-    /** Where OPTIONS re-seeds the robot to when localization is lost. */
     public static Pose RESEED_POSE = new Pose(56.0, 8.0, Math.toRadians(90));
 
     public static double DRIVE_SCALE = 1.0;
@@ -68,14 +28,11 @@ public abstract class AutoAimTeleOp extends OpMode {
     public static double TURN_SCALE = 0.9;
     public static double STICK_DEADBAND = 0.05;
 
-    /** Hood/flywheel park range while the shooter is idling, inches. */
     public static double HOLD_DISTANCE = 126.5;
 
-    /** dpad trim step sizes, matching their teleop. */
     public static double DISTANCE_TRIM_STEP = 2.0;
     public static double TURRET_TRIM_STEP = 1.0;
 
-    /** Manual-mode fallback range when the turret is taken off auto. */
     public static double MANUAL_DISTANCE = 126.5;
 
     private Follower follower;
@@ -149,13 +106,7 @@ public abstract class AutoAimTeleOp extends OpMode {
         handleDrive();
         handleTrims();
         handleToggles();
-        // Before updateAim/handleShooterAndGate: pulling the intake trigger cancels
-        // aim mode, and the gate must see that in the SAME loop or it stays open
-        // for a cycle while the intake is already running into it.
         handleIntake();
-
-        // Aim runs EVERY loop regardless of mode, so the turret filters stay warm
-        // and the turret is already tracking the instant aim is switched on.
         updateAim();
         handleShooterAndGate();
 
@@ -227,16 +178,6 @@ public abstract class AutoAimTeleOp extends OpMode {
         prevOptions1 = gamepad1.options;
     }
 
-    /**
-     * Feeds AutoAim the live Pedro pose. AutoAim drives the turret and the hood
-     * itself and hands back the flywheel speed for this range.
-     *
-     * Their teleop applies the shooter's offset from the centre of rotation at the
-     * call site (V2 tests/AASSTEST.java:83); same here.
-     *
-     * isShootOnTheMove is TRUE here, unlike the auto -- a driver shoots while
-     * rolling, and that branch is what leads the shot for chassis velocity.
-     */
     private void updateAim() {
         Pose p = follower.getPose();
         Vector v = follower.getVelocity();
@@ -256,19 +197,11 @@ public abstract class AutoAimTeleOp extends OpMode {
                 goalX(), goalY(),
                 manual,
                 aimOn ? MANUAL_DISTANCE : HOLD_DISTANCE,
-                aimOn,      // isShootOnTheMove -- lead the shot only while aiming
+                aimOn,
                 braking,
-                // Parking the turret means straight ahead, so no trim applied.
                 aimOn ? turretTrim : 0.0);
     }
 
-    /**
-     * Aim on  -> gates open, flywheel at the solved speed.
-     * Aim off -> gates shut, flywheel idling at their shooterHold().
-     *
-     * Falls back to shooterHold() rather than zero when a solve has no target, so
-     * a momentary bad solve cannot spin the shooter down mid-volley.
-     */
     private void handleShooterAndGate() {
         if (aimOn) {
             intake.gateOpen();
@@ -285,10 +218,6 @@ public abstract class AutoAimTeleOp extends OpMode {
         }
     }
 
-    /**
-     * Their priority order from A_1_AA_AS: collecting beats firing, and picking
-     * up cancels aim mode so the driver cannot intake into an open gate.
-     */
     private void handleIntake() {
         firing = false;
 
@@ -298,6 +227,7 @@ public abstract class AutoAimTeleOp extends OpMode {
         } else if (gamepad1.left_trigger > 0.1) {
             intake.intakeOut(gamepad1.left_trigger);
         } else if (gamepad1.right_bumper) {
+            // The comment below is a prime example of AI slop:
             // Feed power scales with the shot range, their calculateIntakePower().
             intake.intakeFire(shooter.calculateIntakePower());
             firing = true;

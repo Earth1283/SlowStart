@@ -23,10 +23,6 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    // Segment 1's own start point. The export's setStartingPose said (72, 8),
-    // 16 in away from where its own first path begins -- Pedro would snap sideways
-    // at launch. 32008's BLUE_FAR_START is (57.166, 7.362), 1.3 in from this;
-    // the path's own number wins because the path is what actually gets driven.
     private static final Pose START_POSE    = new Pose(56.000,  8.000, Math.toRadians(90));
 
     private static final Pose SHOOT_1_POSE  = new Pose(63.569, 16.026, Math.toRadians(120));
@@ -58,8 +54,6 @@ public class BlueFarAuto extends OpMode {
     public static long TOTAL_SHOOT_TIME_MS = 550;
 
     // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
-    // Four volleys over 409 in of path is a fuller auto than the old three-shot
-    // version, so the park deadline moved out to leave room for the last shot.
     public static double PATH_TIMEOUT = 6.0;
     public static double PARK_DEADLINE = 26.0;
 
@@ -74,7 +68,6 @@ public class BlueFarAuto extends OpMode {
     private Follower follower;
     private TelemetryManager panelsTelemetry;
 
-    // 32008's own subsystems, copied verbatim.
     private final Shooter shooter = new Shooter();
     private final Intake intake = new Intake();
     private final AutoAimSubsystem autoAim = new AutoAimSubsystem();
@@ -191,9 +184,6 @@ public class BlueFarAuto extends OpMode {
     public void loop() {
         follower.update();
 
-        // Aim + shooter run EVERY loop, unconditionally. Nothing below is allowed
-        // to depend on the state machine, and the state machine is not allowed to
-        // depend on the aim solve.
         updateAim();
         driveShooter();
         publishPoseForTeleOp();
@@ -217,8 +207,6 @@ public class BlueFarAuto extends OpMode {
         autoAim.stop();
     }
 
-    // Static, so it survives into TeleOp -- which seeds its pose from these and
-    // cannot auto-aim without them. Stale if TeleOp runs without this auto first.
     private void publishPoseForTeleOp() {
         Pose p = follower.getPose();
         robotConstants.autoEndX = p.getX();
@@ -240,9 +228,9 @@ public class BlueFarAuto extends OpMode {
                 // Pedro reports heading rate in RADIANS/sec; AutoAim wants degrees.
                 Math.toDegrees(follower.getAngularVelocity()),
                 BLUE_GOAL_X, BLUE_GOAL_Y,
-                false, 0.0,          // isManualMode, manualDist -- always solve from pose
-                false,               // isShootOnTheMove -- this auto stops to shoot
-                !follower.isBusy(),  // isBraking
+                false, 0.0,
+                false,
+                !follower.isBusy(),
                 YAW_OFFSET);
     }
 
