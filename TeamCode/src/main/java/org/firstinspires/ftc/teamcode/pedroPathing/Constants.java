@@ -22,12 +22,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
  * (fetched 2026-07-12). Every builder call below appears verbatim in those docs;
  * nothing here is recalled from memory.
  */
+
+
 public class Constants {
 
     public static FollowerConstants followerConstants = new FollowerConstants()
-            // Robot mass in KILOGRAMS, with battery installed. Supplied by team: 12.55.
             .mass(12.55)
-            // Measured by the team, Zero Power Acceleration tuners.
             .forwardZeroPowerAcceleration(-23.69353949060179)
             .lateralZeroPowerAcceleration(-59.22595640999532)
             // Predictive braking, from the team's brake profile tuner.
@@ -79,7 +79,13 @@ public class Constants {
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
-    public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
+    public static PathConstraints pathConstraints = new PathConstraints(
+            0.99,
+            100,
+            1,
+            1
+    ); // nice styling
+
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
                 .mecanumDrivetrain(driveConstants)
