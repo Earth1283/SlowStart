@@ -52,7 +52,6 @@ public class MainTeleOp extends LinearOpMode {
         rightFront = hardwareMap.get(DcMotorEx.class, robotConfigs.RIGHT_FRONT);
         rightBack  = hardwareMap.get(DcMotorEx.class, robotConfigs.RIGHT_BACK);
 
-        // Same directions as pedroPathing/Constants.java and 19859's teleop.
         leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
         leftBack.setDirection(DcMotorSimple.Direction.REVERSE);
         rightFront.setDirection(DcMotorSimple.Direction.FORWARD);
