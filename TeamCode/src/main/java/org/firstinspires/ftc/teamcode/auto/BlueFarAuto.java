@@ -13,6 +13,7 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
 import org.firstinspires.ftc.teamcode.kernel.constants.autoConstants;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
+import org.firstinspires.ftc.teamcode.kernel.motion.GoTo;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.DualServoGate;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
@@ -53,6 +54,7 @@ public class BlueFarAuto extends OpMode {
     }
 
     private Follower follower;
+    private GoTo goTo;
     private TelemetryManager panelsTelemetry;
 
     private final DualFlywheelShooter shooter = new DualFlywheelShooter();
@@ -60,7 +62,7 @@ public class BlueFarAuto extends OpMode {
     private final Gate   gate   = new DualServoGate();
     private final MultiAxisTurret turret = new MultiAxisTurret();
 
-    private PathChain toShoot, pickup1, toShoot1, pickup2, toShoot2, park;
+    private PathChain pickup1, pickup2, park;
 
     private State state = State.DRIVE_TO_SHOOT_1;
     private final Timer stateTimer = new Timer();
@@ -80,6 +82,7 @@ public class BlueFarAuto extends OpMode {
 
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(START_POSE);
+        goTo = new GoTo(follower);
 
         shooter.init(hardwareMap);
         intake.init(hardwareMap);
@@ -104,10 +107,8 @@ public class BlueFarAuto extends OpMode {
     }
 
     private void buildPaths() {
-        toShoot = follower.pathBuilder()
-                .addPath(new BezierLine(START_POSE, SHOOT_POSE))
-                .setLinearHeadingInterpolation(START_POSE.getHeading(), Math.toRadians(120))
-                .build();
+        // toShoot, toShoot1, toShoot2 are single-segment, linear-heading legs,
+        // so i removed them and used the kernel's goto API instead
 
         pickup1 = follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_POSE, MID_1_POSE))
@@ -116,21 +117,11 @@ public class BlueFarAuto extends OpMode {
                 .setTangentHeadingInterpolation()
                 .build();
 
-        toShoot1 = follower.pathBuilder()
-                .addPath(new BezierLine(PICKUP_1_POSE, SHOOT_2_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(120))
-                .build();
-
         pickup2 = follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_2_POSE, MID_2_POSE))
                 .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(180))
                 .addPath(new BezierLine(MID_2_POSE, PICKUP_2_POSE))
                 .setTangentHeadingInterpolation()
-                .build();
-
-        toShoot2 = follower.pathBuilder()
-                .addPath(new BezierLine(PICKUP_2_POSE, SHOOT_3_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(120))
                 .build();
 
         park = follower.pathBuilder()
@@ -146,7 +137,7 @@ public class BlueFarAuto extends OpMode {
         shooter.hold();
 
         opmodeTimer.resetTimer();
-        follower.followPath(toShoot, true);
+        goTo.goTo(START_POSE, SHOOT_POSE);
         setState(State.DRIVE_TO_SHOOT_1, "start");
     }
 
@@ -269,7 +260,7 @@ public class BlueFarAuto extends OpMode {
             case DRIVE_PICKUP_1:
                 if (pathDone()) {
                     intake.stop();
-                    follower.followPath(toShoot1, true);
+                    goTo.goTo(PICKUP_1_POSE, SHOOT_2_POSE);
                     setState(State.DRIVE_TO_SHOOT_2, "pickup 1 done");
                 }
                 break;
@@ -289,7 +280,7 @@ public class BlueFarAuto extends OpMode {
             case DRIVE_PICKUP_2:
                 if (pathDone()) {
                     intake.stop();
-                    follower.followPath(toShoot2, true);
+                    goTo.goTo(PICKUP_2_POSE, SHOOT_3_POSE);
                     setState(State.DRIVE_TO_SHOOT_3, "pickup 2 done");
                 }
                 break;
