@@ -84,3 +84,10 @@ lint/tmp/
 # adb
 adb
 
+# ignore ai slop
+team-config.yaml
+
+# add misc ignores
+*.tmp
+*.loc
+
