@@ -111,14 +111,19 @@ public class RobotConstants {
      *     absolute bearing = atan2(6-19, 138-67) = -10.4 deg
      *     turret relative  = -10.4 - 120         = -130.4 deg
      *
-     * Rests on three assumptions, any of which can flip or break it:
-     *   1. 19859's blue goal coordinates apply to this robot's field frame,
-     *   2. turret 0 deg points straight ahead on the robot,
-     *   3. positive encoder ticks mean counter-clockwise. 19859 REVERSES their turret
-     *      motor; whether 32008's needs the same is unverified.
-     * If the turret parks pointing the wrong way, negate this before anything else.
+     * CORRECTED ON ROBOT: the derived -130.4 parked the turret 180 degrees backwards in
+     * both TeleOp and Auto, so +180 was applied: -130.4 + 180 = 49.6.
+     *
+     * Assumption 2 above is what broke -- the turret's zero does NOT point straight ahead
+     * on this robot, it points straight back. That is a mounting/gearing fact, not a
+     * tuning value, so it will hold until the turret is rebuilt.
+     *
+     * Still unverified: assumption 3, the SIGN. A 180 error and a sign error look
+     * different -- 180 was backwards, a sign error would be mirrored left/right. If the
+     * turret now points roughly at the goal but mirrored across the robot's centerline,
+     * negate this instead of adjusting it.
      */
-    public static double TURRET_PARK_YAW_DEG = -130.4;
+    public static double TURRET_PARK_YAW_DEG = 49.6;
     public static double TURRET_YAW_TOLERANCE_DEG = 2.0;
     public static double TURRET_HOLD_POWER = 0.3;
 
