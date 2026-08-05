@@ -12,13 +12,8 @@ public class MoveTheBot extends LinearOpMode{
     private DcMotor rightFront = null;
     private DcMotor rightBack = null;
 
-    leftFront = hardwareMap.get(DcMotor.class, "lf");
-    leftBack = hardwareMap.get(DcMotor.class, "lb");
-    rightFront = hardwareMap.get(DcMotor.class, "rf");
-    rightFront = hardwareMap.get(DcMotor.class, "lb");
-
     public void handleController(){
-        if (gamepad1.)
+
     }
 
     @Override
