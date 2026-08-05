@@ -15,27 +15,6 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.Range;
 
-/**
- * Team 32008's own AutoAimSubsystem, copied from FTC-32008 V2
- * subsystems/AutoAimSubsystem.java.
- *
- * ONLY change from their file: the constants imports point at kernel.constants
- * instead of constants, and RESET_TURRET_ENCODER_ON_INIT defaults to true (see
- * below). Every gain, filter, formula and hardware call is theirs, unedited.
- *
- * THIS OWNS THE TURRET AND THE HOOD. {@link Shooter} must be started with
- * init(hardwareMap, true) alongside it, or both classes grab motor "lt" and
- * fight -- Shooter's RUN_TO_POSITION against this class's power loop.
- *
- * FRAME: the solve is frame-agnostic as long as the robot pose and the target
- * are in the SAME frame and the heading is measured from that frame's +X axis.
- * Their teleop feeds it Pinpoint coordinates; this repo feeds it Pedro
- * coordinates with the goal converted to match. Do not mix the two.
- *
- * ENCODER ZERO: their file has RESET_TURRET_ENCODER_ON_INIT = false because they
- * zero the turret through Shooter.reset() in a separate ritual. Here it defaults
- * true, so 0 deg = wherever the turret sits at INIT. Park it FORWARD.
- */
 @Configurable
 public class AutoAimSubsystem {
     private DcMotorEx turret;

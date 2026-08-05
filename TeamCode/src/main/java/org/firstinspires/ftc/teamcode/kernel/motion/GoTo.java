@@ -51,3 +51,9 @@ public class GoTo {
         goTo(new Pose(currentX, currentY, currentHdg), new Pose(targetX, targetY, targetHdg));
     }
 }
+
+/*
+This file's Javadoc is acceptable. Why? It's 4 lines at the top, and it actually explains what the
+whole thing does. Every other Javadoc here earned their spots as a parameter, not "hey claude,
+write [slop feature]".
+ */
