@@ -215,11 +215,6 @@ public class BlueFarAuto extends OpMode {
                 YAW_OFFSET);
     }
 
-    /**
-     * Commands the flywheel every loop. Falls back to their shooterHold() rather
-     * than to zero when the solve has no target, so a momentary bad solve cannot
-     * spin the shooter down mid-volley.
-     */
     private void driveShooter() {
         if (!shooterLive) {
             return;
