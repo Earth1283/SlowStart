@@ -11,6 +11,7 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
+import org.firstinspires.ftc.teamcode.kernel.constants.autoConstants;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.DualServoGate;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
@@ -24,7 +25,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    private static final Pose START_POSE    = new Pose(55.790,  8.210, Math.toRadians(90));
+    private static final Pose START_POSE    = autoConstants.BLUE_FAR_START.copy();
     private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
     private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
     private static final Pose PICKUP_1_POSE = new Pose(11.004, 34.805, Math.toRadians(180));
@@ -38,6 +39,11 @@ public class BlueFarAuto extends OpMode {
     public static double SPINUP_TIMEOUT = 2.5;
     public static double PARK_DEADLINE = 25.0;
     public static double TURRET_SETTLE_SECONDS = 0.35;
+
+    public static double TURRET_PRELOAD_DEG = autoConstants.BLUE_FAR_TURRET_PRELOAD;
+    public static double TURRET_SHOT_DEG = autoConstants.BLUE_FAR_TURRET;
+    public static double FIRE_DISTANCE_PRELOAD = autoConstants.FAR_FIRE_DISTANCE_PRELOAD;
+    public static double FIRE_DISTANCE = autoConstants.FAR_FIRE_DISTANCE;
 
     private enum State {
         DRIVE_TO_SHOOT_1, SHOOT_1,
@@ -64,7 +70,9 @@ public class BlueFarAuto extends OpMode {
     private boolean aimed = false;
     private boolean feeding = false;
     private String lastTransition = "none";
-    private double aimDistance = 0, aimTurretDeg = 0, aimVelocity = 0, aimHood = 0;
+    private double aimTurretDeg = 0, aimVelocity = 0, aimHood = 0, aimFireDistance = 0;
+    private double geoDistance = 0, geoTurretDeg = 0;
+    private boolean preloadShotDone = false;
 
     @Override
     public void init() {
@@ -98,7 +106,7 @@ public class BlueFarAuto extends OpMode {
     private void buildPaths() {
         toShoot = follower.pathBuilder()
                 .addPath(new BezierLine(START_POSE, SHOOT_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(120))
+                .setLinearHeadingInterpolation(START_POSE.getHeading(), Math.toRadians(120))
                 .build();
 
         pickup1 = follower.pathBuilder()
@@ -133,11 +141,8 @@ public class BlueFarAuto extends OpMode {
 
     @Override
     public void start() {
-        // followPath() does NOT activate the PIDFs, and a tuning OpMode may have
-        // switched them off. Without this the robot accepts paths and sits still.
         follower.activateAllPIDFs();
 
-        // Idle the flywheel on the way out so the first shot spins up fast.
         shooter.hold();
 
         opmodeTimer.resetTimer();
@@ -168,33 +173,35 @@ public class BlueFarAuto extends OpMode {
     }
 
     /**
-     * Solves aim from the robot's ACTUAL pose and commands shooter + turret.
+     * Commands shooter + turret from 32008's tuned constants.
      *
-     * Uses V2's own cubic fits, so this is the same model the verified robot
-     * shoots with -- not an approximation of it.
+     * The preload shot gets its own pair because the robot has not moved from
+     * the start yet; every later shot uses the standard pair.
      */
     private void aimAtGoal() {
-        Pose p = follower.getPose();
-        double dx = robotConstants.BLUE_TARGET_X - p.getX();
-        double dy = robotConstants.BLUE_TARGET_Y - p.getY();
+        aimTurretDeg    = preloadShotDone ? TURRET_SHOT_DEG : TURRET_PRELOAD_DEG;
+        aimFireDistance = preloadShotDone ? FIRE_DISTANCE   : FIRE_DISTANCE_PRELOAD;
 
-        aimDistance = Math.hypot(dx, dy);
-        double bearingDeg = Math.toDegrees(Math.atan2(dy, dx));
-        double headingDeg = Math.toDegrees(p.getHeading());
-
-        double rel = bearingDeg - headingDeg;
-        while (rel > 180.0)  rel -= 360.0;
-        while (rel < -180.0) rel += 360.0;
-        aimTurretDeg = rel;
-
-        aimVelocity = robotConstants.velocityForDistance(aimDistance);
-        aimHood     = robotConstants.hoodPercentForDistance(aimDistance);
+        aimVelocity = robotConstants.velocityForDistance(aimFireDistance);
+        aimHood     = robotConstants.hoodPercentForDistance(aimFireDistance);
 
         shooter.setTargetVelocity(aimVelocity);
         turret.setSetpoint(aimTurretDeg, aimHood);
+        preloadShotDone = true;
+
+        updateGeometryTelemetry();
+    }
+    private void updateGeometryTelemetry() {
+        Pose p = follower.getPose();
+        double dx = robotConstants.BLUE_TARGET_X - p.getX();
+        double dy = robotConstants.BLUE_TARGET_Y - p.getY();
+        geoDistance = Math.hypot(dx, dy);
+        double rel = Math.toDegrees(Math.atan2(dy, dx)) - Math.toDegrees(p.getHeading());
+        while (rel > 180.0)  rel -= 360.0;
+        while (rel < -180.0) rel += 360.0;
+        geoTurretDeg = rel;
     }
 
-    /** Path is done, stuck, or has taken too long. isBusy() alone hangs on a pinned robot. */
     private boolean pathDone() {
         if (follower.isRobotStuck()) {
             lastTransition = "path ended: ROBOT STUCK";
@@ -336,10 +343,12 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
         panelsTelemetry.debug("Follower busy", follower.isBusy());
         panelsTelemetry.debug("Robot stuck", follower.isRobotStuck());
-        panelsTelemetry.debug("Aim distance (in)", aimDistance);
+        panelsTelemetry.debug("Fire distance (tuned)", aimFireDistance);
         panelsTelemetry.debug("Aim turret (deg)", aimTurretDeg);
         panelsTelemetry.debug("Aim velocity", aimVelocity);
         panelsTelemetry.debug("Aim hood", aimHood);
+        panelsTelemetry.debug("[ref] geometric dist", geoDistance);
+        panelsTelemetry.debug("[ref] geometric turret", geoTurretDeg);
         panelsTelemetry.debug("Turret actual (deg)", turret.getYawDegrees());
         panelsTelemetry.debug("Shooter ticks/sec", shooter.getCurrentVelocity());
         panelsTelemetry.debug("Shooter at speed", shooter.atTargetVelocity());
