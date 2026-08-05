@@ -70,12 +70,14 @@ public class BlueFarAuto extends OpMode {
     private static final Pose PICKUP_1_POSE = new Pose(10.641, 35.271, Math.toRadians(180));
 
     private static final Pose SHOOT_2_POSE  = new Pose(63.783, 16.023, Math.toRadians(120));
-    private static final Pose MID_2_POSE    = new Pose(12.513, 23.225, Math.toRadians(-110));
-    private static final Pose PICKUP_2_POSE = new Pose(10.262, 10.090, Math.toRadians(-110));
+    private static final Pose MID_2_POSE    = new Pose(12.513, 23.225, Math.toRadians(100));
+    // Heading here is documentation only -- BezierLine uses just the x/y of a Pose,
+    // and segment 7 declares its own 60 deg start. Set to match that.
+    private static final Pose PICKUP_2_POSE = new Pose( 8.033,  8.307, Math.toRadians(60));
 
     private static final Pose SHOOT_3_POSE  = new Pose(63.894, 15.991, Math.toRadians(120));
-    private static final Pose MID_3_POSE    = new Pose(45.859, 59.317, Math.toRadians(180));
-    private static final Pose PICKUP_3_POSE = new Pose(10.784, 58.535, Math.toRadians(180));
+    private static final Pose MID_3_POSE    = new Pose(39.397, 41.491, Math.toRadians(180));
+    private static final Pose PICKUP_3_POSE = new Pose(10.115, 23.550, Math.toRadians(180));
 
     private static final Pose SHOOT_4_POSE  = new Pose(63.506, 15.738, Math.toRadians(120));
     private static final Pose PARK_POSE     = new Pose(56.781, 22.746, Math.toRadians(120));
@@ -196,7 +198,7 @@ public class BlueFarAuto extends OpMode {
 
         pickup2 = follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_2_POSE, MID_2_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(-110))
+                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(100))
                 .addPath(new BezierLine(MID_2_POSE, PICKUP_2_POSE))
                 .setTangentHeadingInterpolation()
                 .build();
@@ -247,6 +249,7 @@ public class BlueFarAuto extends OpMode {
         // depend on the aim solve.
         updateAim();
         driveShooter();
+        publishPoseForTeleOp();
 
         if (opmodeTimer.getElapsedTimeSeconds() > PARK_DEADLINE
                 && state != State.PARK && state != State.DONE) {
@@ -260,10 +263,28 @@ public class BlueFarAuto extends OpMode {
 
     @Override
     public void stop() {
+        publishPoseForTeleOp();
         shooter.shooterStop();
         intake.intakeStop();
         intake.gateClose();
         autoAim.stop();
+    }
+
+    /**
+     * Hands the final pose to TeleOp through kernel robotConstants, their
+     * autoEndX/Y/H pattern (V2 auto/BLUE_FAR_18.java loop() and stop()).
+     * A turret robot cannot auto-aim in TeleOp without knowing where it is.
+     *
+     * These are STATIC, so they survive between OpModes -- that is the point, and
+     * also the hazard: run TeleOp without running this auto first and they still
+     * hold the previous run's numbers. TeleOp shows the seeded pose on its init
+     * screen and has a re-seed button for exactly that case.
+     */
+    private void publishPoseForTeleOp() {
+        Pose p = follower.getPose();
+        robotConstants.autoEndX = p.getX();
+        robotConstants.autoEndY = p.getY();
+        robotConstants.autoEndH = p.getHeading();
     }
 
     /**
