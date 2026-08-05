@@ -15,19 +15,17 @@ import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.RollerIntake;
 import org.firstinspires.ftc.teamcode.mechanisms.shooter.DualFlywheelShooter;
-import org.firstinspires.ftc.teamcode.mechanisms.shooter.Shooter;
 import org.firstinspires.ftc.teamcode.mechanisms.turret.MultiAxisTurret;
-import org.firstinspires.ftc.teamcode.mechanisms.turret.Turret;
 
 @TeleOp(name = "32008 TeleOp", group = "32008")
 public class MainTeleOp extends LinearOpMode {
 
     private DcMotorEx leftFront, leftBack, rightFront, rightBack;
 
-    private final Shooter shooter = new DualFlywheelShooter();
+    private final DualFlywheelShooter shooter = new DualFlywheelShooter();
     private final Intake intake = new RollerIntake();
     private final Gate gate = new DualServoGate();
-    private final Turret turret = new MultiAxisTurret();
+    private final MultiAxisTurret turret = new MultiAxisTurret();
 
     private TelemetryManager panelsTelemetry;
 
@@ -38,8 +36,11 @@ public class MainTeleOp extends LinearOpMode {
     private boolean shooterOn = false;
     private boolean prevRightBumper = false;
 
-    private double turretYawDeg = RobotConstants.TURRET_PARK_YAW_DEG;
-    private double turretPitch = RobotConstants.TURRET_PARK_PITCH_PERCENT;
+    // Turret starts centred on its init position; hood comes from the same
+    // distance model the auto uses, so a TeleOp shot matches an auto shot.
+    private double turretYawDeg = 0.0;
+    private double turretPitch =
+            RobotConstants.hoodPercentForDistance(RobotConstants.TELEOP_SHOOT_DISTANCE);
 
     @Override
     public void runOpMode() {
@@ -124,11 +125,16 @@ public class MainTeleOp extends LinearOpMode {
         boolean rightBumper = gamepad1.right_bumper;
         if (rightBumper && !prevRightBumper) {
             shooterOn = !shooterOn;
-            shooter.setTargetVelocity(shooterOn ? RobotConstants.SHOOTER_TARGET_TICKS_PER_SEC : 0.0);
+            if (shooterOn) {
+                shooter.setForDistance(RobotConstants.TELEOP_SHOOT_DISTANCE);
+            } else {
+                shooter.stop();
+            }
         }
         prevRightBumper = rightBumper;
         if (gamepad1.a && shooter.atTargetVelocity()) {
             gate.open();
+            intake.fire();
         } else {
             gate.close();
         }
@@ -136,8 +142,9 @@ public class MainTeleOp extends LinearOpMode {
 
     private void handleTurret() {
         if (gamepad1.b) {
-            turretYawDeg = RobotConstants.TURRET_PARK_YAW_DEG;
-            turretPitch  = RobotConstants.TURRET_PARK_PITCH_PERCENT;
+            turretYawDeg = 0.0;
+            turretPitch  = RobotConstants.hoodPercentForDistance(
+                    RobotConstants.TELEOP_SHOOT_DISTANCE);
         }
 
         if (gamepad1.dpad_left)  turretYawDeg += YAW_NUDGE_DEG;
