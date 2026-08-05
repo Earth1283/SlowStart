@@ -14,7 +14,6 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
 import org.firstinspires.ftc.teamcode.kernel.constants.autoConstants;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
-import org.firstinspires.ftc.teamcode.kernel.motion.GoTo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
@@ -28,21 +27,24 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
  * (flywheels), {@link Intake} (roller + both gates). Only the PATH is this
  * team's own.
  *
- * WHY AUTOAIM INSTEAD OF A FIXED DISTANCE
- * ---------------------------------------
- * The previous version commanded autoConstants.FAR_FIRE_DISTANCE = 126.5 for
- * every shot. Two problems, both of which showed up on the field:
+ * PATH: the 11-segment Pedro Pathing export, split into 8 chains so the robot can
+ * STOP and shoot. Shots fire after segments 1, 4, 7 and 10 -- FOUR volleys.
+ * Every heading interpolation below is copied from the export exactly, including
+ * segment 7's 60 deg start (see SHOOT_3 note).
  *
- *   1. FAR_FIRE_DISTANCE and FAR_HOLD_DISTANCE are BOTH 126.5, so `distance`
- *      never changed and the hood was pinned at one position all match -- the
- *      "hood doesn't move" symptom. It was being commanded; it just had nothing
- *      to move to.
- *   2. 126.5 is a number 32008 hand-tuned for their own shot. This path's shoot
- *      pose is 134.95 in from the goal, so firing it as 126.5 under-speeds the
- *      flywheel by ~3% and the shot lands short.
+ *   toShoot1  seg 1        start   -> shoot1     then SHOOT
+ *   pickup1   segs 2 + 3   shoot1  -> pickup1    intake running
+ *   toShoot2  seg 4        pickup1 -> shoot2     then SHOOT
+ *   pickup2   segs 5 + 6   shoot2  -> pickup2    intake running
+ *   toShoot3  seg 7        pickup2 -> shoot3     then SHOOT
+ *   pickup3   segs 8 + 9   shoot3  -> pickup3    intake running
+ *   toShoot4  seg 10       pickup3 -> shoot4     then SHOOT
+ *   park      seg 11       shoot4  -> park
  *
- * AutoAim solves range from the live pose every loop and feeds both the flywheel
- * and the hood from it, so neither number has to be guessed.
+ * AIMING: AutoAim solves range from the live pose every loop and feeds both the
+ * flywheel and the hood from it. No fixed fire distance and no fixed turret angle
+ * -- all four shoot poses come out at ~136.4 in range and ~-5.2 deg turret, but
+ * nothing here depends on that.
  *
  * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The gate and intake run on plain
  * timers, and the flywheel is commanded every loop with a shooterHold() fallback.
@@ -57,21 +59,26 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    // 32008's start POSITION, this path's own start HEADING (90 deg).
-    // Their 180 deg belongs to their path; mixing it in here rotates Pedro's whole
-    // field frame 90 deg from reality and the robot drives sideways/backwards.
-    private static final Pose START_POSE = new Pose(
-            autoConstants.BLUE_FAR_START.getX(),
-            autoConstants.BLUE_FAR_START.getY(),
-            Math.toRadians(90));
-    private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
-    private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
-    private static final Pose PICKUP_1_POSE = new Pose(11.004, 34.805, Math.toRadians(180));
-    private static final Pose SHOOT_2_POSE  = new Pose(67.108, 19.091, Math.toRadians(120));
-    private static final Pose MID_2_POSE    = new Pose(48.862, 59.883, Math.toRadians(180));
-    private static final Pose PICKUP_2_POSE = new Pose(14.918, 58.551, Math.toRadians(180));
-    private static final Pose SHOOT_3_POSE  = new Pose(67.119, 19.121, Math.toRadians(120));
-    private static final Pose PARK_POSE     = new Pose(57.735, 26.906, Math.toRadians(120));
+    // Segment 1's own start point. The export's setStartingPose said (72, 8),
+    // 16 in away from where its own first path begins -- Pedro would snap sideways
+    // at launch. 32008's BLUE_FAR_START is (57.166, 7.362), 1.3 in from this;
+    // the path's own number wins because the path is what actually gets driven.
+    private static final Pose START_POSE    = new Pose(56.000,  8.000, Math.toRadians(90));
+
+    private static final Pose SHOOT_1_POSE  = new Pose(63.569, 16.026, Math.toRadians(120));
+    private static final Pose MID_1_POSE    = new Pose(48.418, 36.139, Math.toRadians(180));
+    private static final Pose PICKUP_1_POSE = new Pose(10.641, 35.271, Math.toRadians(180));
+
+    private static final Pose SHOOT_2_POSE  = new Pose(63.783, 16.023, Math.toRadians(120));
+    private static final Pose MID_2_POSE    = new Pose(12.513, 23.225, Math.toRadians(-110));
+    private static final Pose PICKUP_2_POSE = new Pose(10.262, 10.090, Math.toRadians(-110));
+
+    private static final Pose SHOOT_3_POSE  = new Pose(63.894, 15.991, Math.toRadians(120));
+    private static final Pose MID_3_POSE    = new Pose(45.859, 59.317, Math.toRadians(180));
+    private static final Pose PICKUP_3_POSE = new Pose(10.784, 58.535, Math.toRadians(180));
+
+    private static final Pose SHOOT_4_POSE  = new Pose(63.506, 15.738, Math.toRadians(120));
+    private static final Pose PARK_POSE     = new Pose(56.781, 22.746, Math.toRadians(120));
 
     /** BLUE goal, PEDRO frame. Must read 8 / 136 -- 136 / 136 is the RED goal. */
     public static double BLUE_GOAL_X = 144.0 - robotConstants.BLUE_TARGET_Y;
@@ -85,24 +92,26 @@ public class BlueFarAuto extends OpMode {
     public static double YAW_OFFSET = 0.0;
 
     // Their timings, unchanged. AUTO_FAR_WAIT_FOR_SHOOT is 400 ms in the kernel;
-    // their preload gets +800 ms because the flywheel starts from cold.
+    // the first volley gets +800 ms because the flywheel starts from cold.
     public static long WAIT_FOR_SHOOT_MS = autoConstants.AUTO_FAR_WAIT_FOR_SHOOT;
     public static long PRELOAD_EXTRA_MS = 800;
     public static long TOTAL_SHOOT_TIME_MS = 550;
 
     // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
+    // Four volleys over 409 in of path is a fuller auto than the old three-shot
+    // version, so the park deadline moved out to leave room for the last shot.
     public static double PATH_TIMEOUT = 6.0;
-    public static double PARK_DEADLINE = 25.0;
+    public static double PARK_DEADLINE = 26.0;
 
     private enum State {
         DRIVE_TO_SHOOT_1, SHOOT_1,
         DRIVE_PICKUP_1,   DRIVE_TO_SHOOT_2, SHOOT_2,
         DRIVE_PICKUP_2,   DRIVE_TO_SHOOT_3, SHOOT_3,
+        DRIVE_PICKUP_3,   DRIVE_TO_SHOOT_4, SHOOT_4,
         PARK, DONE
     }
 
     private Follower follower;
-    private GoTo goTo;
     private TelemetryManager panelsTelemetry;
 
     // 32008's own subsystems, copied verbatim.
@@ -112,7 +121,8 @@ public class BlueFarAuto extends OpMode {
 
     private AutoAimSubsystem.TurretCommand aim = new AutoAimSubsystem.TurretCommand();
 
-    private PathChain pickup1, pickup2, park;
+    private PathChain toShoot1, pickup1, toShoot2, pickup2,
+                     toShoot3, pickup3, toShoot4, park;
 
     private State state = State.DRIVE_TO_SHOOT_1;
     private final Timer stateTimer = new Timer();
@@ -130,7 +140,6 @@ public class BlueFarAuto extends OpMode {
 
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(START_POSE);
-        goTo = new GoTo(follower);
 
         intake.init(hardwareMap);
         // aass = true: AutoAim owns turret "lt" AND hood "panel". Without this
@@ -142,7 +151,7 @@ public class BlueFarAuto extends OpMode {
 
         buildPaths();
 
-        panelsTelemetry.debug("Status", "Initialized -- BLUE FAR");
+        panelsTelemetry.debug("Status", "Initialized -- BLUE FAR, 4 shots");
         panelsTelemetry.update(telemetry);
     }
 
@@ -160,26 +169,60 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.update(telemetry);
     }
 
+    /**
+     * Every heading interpolation is the export's, verbatim. These are built as
+     * explicit chains rather than through the kernel's GoTo helper because GoTo
+     * derives the start heading from the pose it is handed -- which would silently
+     * rewrite segment 7, whose export declares a 60 deg start that does not match
+     * the tangent heading segment 6 leaves the robot at.
+     */
     private void buildPaths() {
-        // toShoot, toShoot1, toShoot2 are single-segment, linear-heading legs,
-        // so i removed them and used the kernel's goto API instead
+        toShoot1 = follower.pathBuilder()
+                .addPath(new BezierLine(START_POSE, SHOOT_1_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(120))
+                .build();
 
         pickup1 = follower.pathBuilder()
-                .addPath(new BezierLine(SHOOT_POSE, MID_1_POSE))
+                .addPath(new BezierLine(SHOOT_1_POSE, MID_1_POSE))
                 .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(180))
                 .addPath(new BezierLine(MID_1_POSE, PICKUP_1_POSE))
                 .setTangentHeadingInterpolation()
                 .build();
 
+        toShoot2 = follower.pathBuilder()
+                .addPath(new BezierLine(PICKUP_1_POSE, SHOOT_2_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(120))
+                .build();
+
         pickup2 = follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_2_POSE, MID_2_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(-110))
                 .addPath(new BezierLine(MID_2_POSE, PICKUP_2_POSE))
                 .setTangentHeadingInterpolation()
                 .build();
 
+        // Export declares a 60 deg start here even though segment 6 ends on a
+        // tangent heading near -100 deg. Kept as exported -- Pedro interpolates
+        // from 60 regardless, and changing it would be changing the path.
+        toShoot3 = follower.pathBuilder()
+                .addPath(new BezierLine(PICKUP_2_POSE, SHOOT_3_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(60), Math.toRadians(120))
+                .build();
+
+        pickup3 = follower.pathBuilder()
+                .addPath(new BezierLine(SHOOT_3_POSE, MID_3_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(120), Math.toRadians(180))
+                .addPath(new BezierLine(MID_3_POSE, PICKUP_3_POSE))
+                .setTangentHeadingInterpolation()
+                .build();
+
+        toShoot4 = follower.pathBuilder()
+                .addPath(new BezierLine(PICKUP_3_POSE, SHOOT_4_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(120))
+                .build();
+
         park = follower.pathBuilder()
-                .addPath(new BezierLine(SHOOT_3_POSE, PARK_POSE))
+                .addPath(new BezierLine(SHOOT_4_POSE, PARK_POSE))
                 .setTangentHeadingInterpolation()
                 .build();
     }
@@ -191,7 +234,7 @@ public class BlueFarAuto extends OpMode {
         shooterLive = true;
 
         opmodeTimer.resetTimer();
-        goTo.goTo(START_POSE, SHOOT_POSE);
+        follower.followPath(toShoot1, true);
         setState(State.DRIVE_TO_SHOOT_1, "start");
     }
 
@@ -344,7 +387,7 @@ public class BlueFarAuto extends OpMode {
             case DRIVE_PICKUP_1:
                 if (pathDone()) {
                     intake.intakeStop();
-                    goTo.goTo(PICKUP_1_POSE, SHOOT_2_POSE);
+                    follower.followPath(toShoot2, true);
                     setState(State.DRIVE_TO_SHOOT_2, "pickup 1 done");
                 }
                 break;
@@ -364,7 +407,7 @@ public class BlueFarAuto extends OpMode {
             case DRIVE_PICKUP_2:
                 if (pathDone()) {
                     intake.intakeStop();
-                    goTo.goTo(PICKUP_2_POSE, SHOOT_3_POSE);
+                    follower.followPath(toShoot3, true);
                     setState(State.DRIVE_TO_SHOOT_3, "pickup 2 done");
                 }
                 break;
@@ -375,9 +418,29 @@ public class BlueFarAuto extends OpMode {
 
             case SHOOT_3:
                 if (shotComplete()) {
+                    intake.intakeIn();
+                    follower.followPath(pickup3, true);
+                    setState(State.DRIVE_PICKUP_3, "shot 3 done");
+                }
+                break;
+
+            case DRIVE_PICKUP_3:
+                if (pathDone()) {
+                    intake.intakeStop();
+                    follower.followPath(toShoot4, true);
+                    setState(State.DRIVE_TO_SHOOT_4, "pickup 3 done");
+                }
+                break;
+
+            case DRIVE_TO_SHOOT_4:
+                if (pathDone()) setState(State.SHOOT_4, "arrived: shoot 4");
+                break;
+
+            case SHOOT_4:
+                if (shotComplete()) {
                     intake.intakeStop();
                     follower.followPath(park, true);
-                    setState(State.PARK, "shot 3 done");
+                    setState(State.PARK, "shot 4 done");
                 }
                 break;
 
