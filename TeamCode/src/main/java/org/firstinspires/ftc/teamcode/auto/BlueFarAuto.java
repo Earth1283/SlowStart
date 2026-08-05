@@ -19,42 +19,6 @@ import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 
-/**
- * Team 32008 -- DECODE 2025-26 -- BLUE FAR autonomous.
- *
- * 32008's own subsystems, copied verbatim into teamcode/subsystems:
- * {@link AutoAimSubsystem} (turret + hood + shot solve), {@link Shooter}
- * (flywheels), {@link Intake} (roller + both gates). Only the PATH is this
- * team's own.
- *
- * PATH: the 11-segment Pedro Pathing export, split into 8 chains so the robot can
- * STOP and shoot. Shots fire after segments 1, 4, 7 and 10 -- FOUR volleys.
- * Every heading interpolation below is copied from the export exactly, including
- * segment 7's 60 deg start (see SHOOT_3 note).
- *
- *   toShoot1  seg 1        start   -> shoot1     then SHOOT
- *   pickup1   segs 2 + 3   shoot1  -> pickup1    intake running
- *   toShoot2  seg 4        pickup1 -> shoot2     then SHOOT
- *   pickup2   segs 5 + 6   shoot2  -> pickup2    intake running
- *   toShoot3  seg 7        pickup2 -> shoot3     then SHOOT
- *   pickup3   segs 8 + 9   shoot3  -> pickup3    intake running
- *   toShoot4  seg 10       pickup3 -> shoot4     then SHOOT
- *   park      seg 11       shoot4  -> park
- *
- * AIMING: AutoAim solves range from the live pose every loop and feeds both the
- * flywheel and the hood from it. No fixed fire distance and no fixed turret angle
- * -- all four shoot poses come out at ~136.4 in range and ~-5.2 deg turret, but
- * nothing here depends on that.
- *
- * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The gate and intake run on plain
- * timers, and the flywheel is commanded every loop with a shooterHold() fallback.
- * An earlier version made the gate wait for aim lock, and one bad solve silently
- * killed the shooter, hood, gate and intake together.
- *
- * FIELD FRAME: the kernel states goals in the PINPOINT frame (pinX = pedroY,
- * pinY = 144 - pedroX, per V2 tests/AASSTEST.java:59). Converted to Pedro below.
- * Blue is (8, 136); (136, 136) is the RED goal.
- */
 @Autonomous(name = "32008 Blue Far Auto", group = "32008")
 @Configurable
 public class BlueFarAuto extends OpMode {
@@ -82,15 +46,9 @@ public class BlueFarAuto extends OpMode {
     private static final Pose SHOOT_4_POSE  = new Pose(63.506, 15.738, Math.toRadians(120));
     private static final Pose PARK_POSE     = new Pose(56.781, 22.746, Math.toRadians(120));
 
-    /** BLUE goal, PEDRO frame. Must read 8 / 136 -- 136 / 136 is the RED goal. */
     public static double BLUE_GOAL_X = 144.0 - robotConstants.BLUE_TARGET_Y;
     public static double BLUE_GOAL_Y = robotConstants.BLUE_TARGET_X;
 
-    /**
-     * Turret mounting trim, degrees, passed straight to AutoAim's yawOffset.
-     * Their own verified angles sit ~2.2 deg off the pure geometric solve, well
-     * inside the 5 deg lock tolerance at this range, so 0 is the honest default.
-     */
     public static double YAW_OFFSET = 0.0;
 
     // Their timings, unchanged. AUTO_FAR_WAIT_FOR_SHOOT is 400 ms in the kernel;
@@ -171,13 +129,6 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.update(telemetry);
     }
 
-    /**
-     * Every heading interpolation is the export's, verbatim. These are built as
-     * explicit chains rather than through the kernel's GoTo helper because GoTo
-     * derives the start heading from the pose it is handed -- which would silently
-     * rewrite segment 7, whose export declares a 60 deg start that does not match
-     * the tangent heading segment 6 leaves the robot at.
-     */
     private void buildPaths() {
         toShoot1 = follower.pathBuilder()
                 .addPath(new BezierLine(START_POSE, SHOOT_1_POSE))
@@ -202,10 +153,6 @@ public class BlueFarAuto extends OpMode {
                 .addPath(new BezierLine(MID_2_POSE, PICKUP_2_POSE))
                 .setTangentHeadingInterpolation()
                 .build();
-
-        // Export declares a 60 deg start here even though segment 6 ends on a
-        // tangent heading near -100 deg. Kept as exported -- Pedro interpolates
-        // from 60 regardless, and changing it would be changing the path.
         toShoot3 = follower.pathBuilder()
                 .addPath(new BezierLine(PICKUP_2_POSE, SHOOT_3_POSE))
                 .setLinearHeadingInterpolation(Math.toRadians(60), Math.toRadians(120))
@@ -270,16 +217,8 @@ public class BlueFarAuto extends OpMode {
         autoAim.stop();
     }
 
-    /**
-     * Hands the final pose to TeleOp through kernel robotConstants, their
-     * autoEndX/Y/H pattern (V2 auto/BLUE_FAR_18.java loop() and stop()).
-     * A turret robot cannot auto-aim in TeleOp without knowing where it is.
-     *
-     * These are STATIC, so they survive between OpModes -- that is the point, and
-     * also the hazard: run TeleOp without running this auto first and they still
-     * hold the previous run's numbers. TeleOp shows the seeded pose on its init
-     * screen and has a re-seed button for exactly that case.
-     */
+    // Static, so it survives into TeleOp -- which seeds its pose from these and
+    // cannot auto-aim without them. Stale if TeleOp runs without this auto first.
     private void publishPoseForTeleOp() {
         Pose p = follower.getPose();
         robotConstants.autoEndX = p.getX();
@@ -287,13 +226,6 @@ public class BlueFarAuto extends OpMode {
         robotConstants.autoEndH = p.getHeading();
     }
 
-    /**
-     * Feeds AutoAim the live Pedro pose. AutoAim drives the turret and the hood
-     * itself and hands back the flywheel speed for this range.
-     *
-     * Their teleop applies the shooter's offset from the centre of rotation at the
-     * call site (V2 tests/AASSTEST.java:83); same here.
-     */
     private void updateAim() {
         Pose p = follower.getPose();
         Vector v = follower.getVelocity();
@@ -314,11 +246,6 @@ public class BlueFarAuto extends OpMode {
                 YAW_OFFSET);
     }
 
-    /**
-     * Commands the flywheel every loop. Falls back to their shooterHold() rather
-     * than to zero when the solve has no target, so a momentary bad solve cannot
-     * spin the shooter down mid-volley.
-     */
     private void driveShooter() {
         if (!shooterLive) {
             return;
@@ -346,10 +273,6 @@ public class BlueFarAuto extends OpMode {
         return false;
     }
 
-    /**
-     * One volley, their order from BLUE_FAR_18 -- gate open, wait, fire, wait,
-     * gate close. Pure timers: the aim solve is never consulted here.
-     */
     private boolean shotComplete() {
         switch (shotPhase) {
 
