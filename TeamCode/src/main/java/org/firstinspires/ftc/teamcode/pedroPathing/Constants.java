@@ -18,6 +18,10 @@ import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 
 public class Constants {
 
+    // WARNING: PedroPathing constants were found by running the Tuning script.
+    // These are as good as magic numbers, so don't change unless you changed something in the bot's
+    // physical layout
+
     public static FollowerConstants followerConstants = new FollowerConstants()
             .mass(13.7)
             .forwardZeroPowerAcceleration(-27.347306480528307)

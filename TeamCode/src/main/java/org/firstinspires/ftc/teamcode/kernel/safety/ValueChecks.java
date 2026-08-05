@@ -2,9 +2,7 @@ package org.firstinspires.ftc.teamcode.kernel.safety;
 
 public class ValueChecks {
     /*
-    Pass an object into checkNotNullParameter, and it will
-    return true if it is not null, false if not null.
-    Java 7 didn't add the Object feature :)
+    We know Java 7 added the Object method.
      */
     public static boolean checkNullParameter(Object obj) {
         return obj != null;
@@ -59,6 +57,7 @@ public class ValueChecks {
         return normalized;
     }
 
+    // quick overload of normalizeAngle to support doubles
     public static double normalizeAngle(double angle) {
         double normalized = angle % 360;
         normalized = (normalized + 360) % 360; // Force to [0, 360)
