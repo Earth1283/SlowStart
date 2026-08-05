@@ -25,7 +25,13 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    private static final Pose START_POSE    = autoConstants.BLUE_FAR_START.copy();
+    // 32008's start POSITION, this path's own start HEADING (90 deg).
+    // Their 180 deg belongs to their path; mixing it in here rotates Pedro's whole
+    // field frame 90 deg from reality and the robot drives sideways/backwards.
+    private static final Pose START_POSE = new Pose(
+            autoConstants.BLUE_FAR_START.getX(),
+            autoConstants.BLUE_FAR_START.getY(),
+            Math.toRadians(90));
     private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
     private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
     private static final Pose PICKUP_1_POSE = new Pose(11.004, 34.805, Math.toRadians(180));
