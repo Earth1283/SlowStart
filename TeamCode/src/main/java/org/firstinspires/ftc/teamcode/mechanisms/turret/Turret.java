@@ -24,7 +24,7 @@ public interface Turret {
      *
      * @param yawDegrees   yaw angle, relative to wherever the turret sat at init
      * @param pitchPercent pitch as a fraction of travel, 0.0-1.0, mapped between
-     *                     RobotConstants.PITCH_MIN and PITCH_MAX
+     *                     robotConstants.HOOD_LOWER_LIMIT and HOOD_UPPER_LIMIT
      */
     void setSetpoint(double yawDegrees, double pitchPercent);
 

@@ -3,7 +3,8 @@ package org.firstinspires.ftc.teamcode.mechanisms.intake;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import org.firstinspires.ftc.teamcode.RobotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 
 /**
  * Roller-type {@link Intake} for team 32008: one motor spun inward to collect,
@@ -18,18 +19,18 @@ public class RollerIntake implements Intake {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        roller = hardwareMap.get(DcMotor.class, RobotConstants.INTAKE_NAME);
+        roller = hardwareMap.get(DcMotor.class, robotConfigs.INTAKE);
         roller.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
     }
 
     @Override
     public void intake() {
-        roller.setPower(RobotConstants.INTAKE_POWER);
+        roller.setPower(panelConstants.INTAKE_POWER);
     }
 
     @Override
     public void reverse() {
-        roller.setPower(-RobotConstants.INTAKE_POWER);
+        roller.setPower(-panelConstants.INTAKE_POWER);
     }
 
     @Override

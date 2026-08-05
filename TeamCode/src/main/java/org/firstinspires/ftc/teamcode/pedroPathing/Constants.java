@@ -13,6 +13,7 @@ import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 
 /**
  * Pedro Pathing configuration for FTC team 32008 (DECODE 2025-26).
@@ -105,10 +106,10 @@ public class Constants {
             .centripetalScaling(0);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
-            .leftFrontMotorName("lf")
-            .leftRearMotorName("lb")
-            .rightFrontMotorName("rf")
-            .rightRearMotorName("rb")
+            .leftFrontMotorName(robotConfigs.LEFT_FRONT)
+            .leftRearMotorName(robotConfigs.LEFT_BACK)
+            .rightFrontMotorName(robotConfigs.RIGHT_FRONT)
+            .rightRearMotorName(robotConfigs.RIGHT_BACK)
             .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
@@ -131,7 +132,7 @@ public class Constants {
             .forwardPodY(-5.3150)
             .strafePodX(0.0)
             .distanceUnit(DistanceUnit.INCH)
-            .hardwareMapName("pp")
+            .hardwareMapName(robotConfigs.PIN_POINT)
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED);

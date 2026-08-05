@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.kernel.constants;
 
 import com.bylazar.configurables.annotations.Configurable;
 
-//未测试 未使用
 @Configurable
 public class panelConstants {
     public static double SHOOTER_KP = 80;
@@ -15,4 +14,6 @@ public class panelConstants {
 
     public static double VELOCITY_TOR = 20;
     public static double INTAKE_POWER = 1;
+
+    public static double SHOOTER_TARGET_TICKS_PER_SEC = 1453.0;
 }

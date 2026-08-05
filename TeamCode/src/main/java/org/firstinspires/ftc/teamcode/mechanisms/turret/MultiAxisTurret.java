@@ -6,7 +6,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
-import org.firstinspires.ftc.teamcode.RobotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 
 /**
  * Two-axis {@link Turret} for team 32008: a yaw MOTOR ("lt") and a pitch SERVO
@@ -35,25 +36,25 @@ public class MultiAxisTurret implements Turret {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        yaw = hardwareMap.get(DcMotorEx.class, RobotConstants.TURRET_YAW_NAME);
+        yaw = hardwareMap.get(DcMotorEx.class, robotConfigs.TURRET);
         yaw.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         yaw.setTargetPosition(0);
         yaw.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        yaw.setPower(RobotConstants.TURRET_HOLD_POWER);
+        yaw.setPower(robotConstants.TURRET_HOLD_POWER);
         yaw.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        pitch = hardwareMap.get(Servo.class, RobotConstants.TURRET_PITCH_NAME);
+        pitch = hardwareMap.get(Servo.class, robotConfigs.HOOD);
     }
 
     @Override
     public void setSetpoint(double yawDegrees, double pitchPercent) {
         yawTargetDeg = yawDegrees;
         yaw.setTargetPosition((int) Math.round(degreesToTicks(yawDegrees)));
-        yaw.setPower(RobotConstants.TURRET_HOLD_POWER);
+        yaw.setPower(robotConstants.TURRET_HOLD_POWER);
 
         double clamped = Range.clip(pitchPercent, 0.0, 1.0);
-        pitch.setPosition(RobotConstants.PITCH_MIN
-                + clamped * (RobotConstants.PITCH_MAX - RobotConstants.PITCH_MIN));
+        pitch.setPosition(robotConstants.HOOD_LOWER_LIMIT
+                + clamped * (robotConstants.HOOD_UPPER_LIMIT - robotConstants.HOOD_LOWER_LIMIT));
     }
 
     @Override
@@ -70,7 +71,7 @@ public class MultiAxisTurret implements Turret {
 
     @Override
     public boolean atSetpoint() {
-        return Math.abs(getYawDegrees() - yawTargetDeg) <= RobotConstants.TURRET_YAW_TOLERANCE_DEG;
+        return Math.abs(getYawDegrees() - yawTargetDeg) <= robotConstants.TURRET_YAW_TOLERANCE_DEG;
     }
 
     @Override
@@ -79,12 +80,12 @@ public class MultiAxisTurret implements Turret {
     }
 
     private double degreesToTicks(double degrees) {
-        return degrees / RobotConstants.TURRET_FULL_RANGE_DEGREE
-                * RobotConstants.TURRET_FULL_RANGE_ENCODER;
+        return degrees / robotConstants.TURRET_FULL_RANGE_DEGREE
+                * robotConstants.TURRET_FULL_RANGE_ENCODER;
     }
 
     private double ticksToDegrees(double ticks) {
-        return ticks / RobotConstants.TURRET_FULL_RANGE_ENCODER
-                * RobotConstants.TURRET_FULL_RANGE_DEGREE;
+        return ticks / robotConstants.TURRET_FULL_RANGE_ENCODER
+                * robotConstants.TURRET_FULL_RANGE_DEGREE;
     }
 }

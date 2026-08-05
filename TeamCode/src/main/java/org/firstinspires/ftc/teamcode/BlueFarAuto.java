@@ -11,6 +11,8 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
+import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.DualServoGate;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
@@ -133,11 +135,11 @@ public class BlueFarAuto extends OpMode {
         // switched the PIDFs off. Without it the robot accepts paths and sits still.
         follower.activateAllPIDFs();
 
-        turret.setSetpoint(RobotConstants.TURRET_PARK_YAW_DEG,
-                           RobotConstants.TURRET_PARK_PITCH_PERCENT);
+        turret.setSetpoint(robotConstants.TURRET_PARK_YAW_DEG,
+                           robotConstants.TURRET_PARK_PITCH_PERCENT);
 
         // Spin up on the way to the first shot rather than after arriving.
-        shooter.setTargetVelocity(RobotConstants.SHOOTER_TARGET_TICKS_PER_SEC);
+        shooter.setTargetVelocity(panelConstants.SHOOTER_TARGET_TICKS_PER_SEC);
 
         opmodeTimer.resetTimer();
         follower.followPath(toShoot, true);
@@ -290,7 +292,7 @@ public class BlueFarAuto extends OpMode {
             return false;
         }
 
-        if (feedTimer.getElapsedTimeSeconds() > RobotConstants.GATE_FEED_SECONDS) {
+        if (feedTimer.getElapsedTimeSeconds() > robotConstants.GATE_FEED_SECONDS) {
             gate.close();
             feeding = false;
             return true;
