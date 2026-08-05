@@ -7,10 +7,6 @@ public class BoundsCheck {
     public double acceptableError = 2.5;
     public double leniency = 0.0;
 
-    /*
-    Is the robot outside the acceptable left range of
-    (-acceptable, -acceptable)?
-     */
     public void isInBounds(double x, double y, boolean lenient) {
         if (lenient) {
             leniency = 6.9;
