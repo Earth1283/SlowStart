@@ -11,8 +11,8 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.DualServoGate;
+import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.RollerIntake;
 import org.firstinspires.ftc.teamcode.mechanisms.shooter.DualFlywheelShooter;
@@ -21,48 +21,62 @@ import org.firstinspires.ftc.teamcode.mechanisms.turret.MultiAxisTurret;
 import org.firstinspires.ftc.teamcode.mechanisms.turret.Turret;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-
 @Autonomous(name = "32008 Blue Far Auto", group = "32008")
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    private TelemetryManager panelsTelemetry;
-    public Follower follower;
-    private Timer pathTimer;
-    private int pathState;
-
-    private Shooter shooter;
-    private Intake intake;
-    private Gate gate;
-    private Turret turret;
-
-    // -- Field poses, straight from the team's supplied path (inches, Pedro frame) --
-    private static final Pose START_POSE   = new Pose(55.790, 8.210, Math.toRadians(90));
-    private static final Pose SHOOT_POSE   = new Pose(66.723, 18.970, Math.toRadians(120));
-    private static final Pose MID_1_POSE   = new Pose(48.906, 34.497, Math.toRadians(180));
+    // ---- Field poses, from the team's supplied path (inches, Pedro frame) ----
+    private static final Pose START_POSE    = new Pose(55.790,  8.210, Math.toRadians(90));
+    private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
+    private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
     private static final Pose PICKUP_1_POSE = new Pose(11.004, 34.805, Math.toRadians(180));
-    private static final Pose SHOOT_2_POSE = new Pose(67.108, 19.091, Math.toRadians(120));
-    private static final Pose MID_2_POSE   = new Pose(48.862, 59.883, Math.toRadians(180));
+    private static final Pose SHOOT_2_POSE  = new Pose(67.108, 19.091, Math.toRadians(120));
+    private static final Pose MID_2_POSE    = new Pose(48.862, 59.883, Math.toRadians(180));
     private static final Pose PICKUP_2_POSE = new Pose(14.918, 58.551, Math.toRadians(180));
-    private static final Pose SHOOT_3_POSE = new Pose(67.119, 19.121, Math.toRadians(120));
-    private static final Pose PARK_POSE    = new Pose(57.735, 26.906, Math.toRadians(120));
+    private static final Pose SHOOT_3_POSE  = new Pose(67.119, 19.121, Math.toRadians(120));
+    private static final Pose PARK_POSE     = new Pose(57.735, 26.906, Math.toRadians(120));
+
+    // ---- Timeouts, all seconds. Every one of these exists to stop a hang. ----
+    /** Longest a single path may run before the auto gives up and moves on. */
+    public static double PATH_TIMEOUT = 6.0;
+    /** Longest to wait for the flywheel before firing anyway. */
+    public static double SPINUP_TIMEOUT = 2.5;
+    /** Hard deadline: at this point the auto abandons whatever it is doing and parks. */
+    public static double PARK_DEADLINE = 25.0;
+
+    private enum State {
+        DRIVE_TO_SHOOT_1, SHOOT_1,
+        DRIVE_PICKUP_1,   DRIVE_TO_SHOOT_2, SHOOT_2,
+        DRIVE_PICKUP_2,   DRIVE_TO_SHOOT_3, SHOOT_3,
+        PARK, DONE
+    }
+
+    private Follower follower;
+    private TelemetryManager panelsTelemetry;
+
+    private final Shooter shooter = new DualFlywheelShooter();
+    private final Intake  intake  = new RollerIntake();
+    private final Gate    gate    = new DualServoGate();
+    private final Turret  turret  = new MultiAxisTurret();
 
     private PathChain toShoot, pickup1, toShoot1, pickup2, toShoot2, park;
+
+    private State state = State.DRIVE_TO_SHOOT_1;
+    private final Timer stateTimer = new Timer();
+    private final Timer opmodeTimer = new Timer();
+
+    /** Set once the gates have opened for the current shot, so feed time is measured from there. */
+    private boolean feeding = false;
+    private final Timer feedTimer = new Timer();
+    /** Last reason the state machine advanced -- surfaced on telemetry for debugging. */
+    private String lastTransition = "none";
 
     @Override
     public void init() {
         panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
-        pathTimer = new Timer();
 
         follower = Constants.createFollower(hardwareMap);
-        // Matches the first path's own start point. The original code set (72, 8),
-        // ~16 inches off the path start, which makes Pedro snap sideways at launch.
         follower.setStartingPose(START_POSE);
-
-        shooter = new DualFlywheelShooter();
-        intake = new RollerIntake();
-        gate = new DualServoGate();
-        turret = new MultiAxisTurret();
 
         shooter.init(hardwareMap);
         intake.init(hardwareMap);
@@ -71,8 +85,22 @@ public class BlueFarAuto extends OpMode {
 
         buildPaths();
 
-        panelsTelemetry.debug("Status", "Initialized");
-        panelsTelemetry.debug("Alliance", "BLUE FAR");
+        panelsTelemetry.debug("Status", "Initialized -- BLUE FAR");
+        panelsTelemetry.update(telemetry);
+    }
+
+    /**
+     * Keeps the localizer ticking before START. Pedro needs this to have a live,
+     * settled pose the moment the match begins -- and it lets the drive team see
+     * the pose on Panels while placing the robot.
+     */
+    @Override
+    public void init_loop() {
+        follower.update();
+        panelsTelemetry.debug("Status", "Ready -- place robot on the LAUNCH LINE");
+        panelsTelemetry.debug("X", follower.getPose().getX());
+        panelsTelemetry.debug("Y", follower.getPose().getY());
+        panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
         panelsTelemetry.update(telemetry);
     }
 
@@ -114,26 +142,37 @@ public class BlueFarAuto extends OpMode {
 
     @Override
     public void start() {
+        // Defect 1: followPath() does not do this, and a tuning OpMode may have
+        // switched the PIDFs off. Without it the robot accepts paths and sits still.
+        follower.activateAllPIDFs();
+
         turret.setSetpoint(RobotConstants.TURRET_PARK_YAW_DEG,
                            RobotConstants.TURRET_PARK_PITCH_PERCENT);
-        setPathState(0);
+
+        // Spin up on the way to the first shot rather than after arriving.
+        shooter.setTargetVelocity(RobotConstants.SHOOTER_TARGET_TICKS_PER_SEC);
+
+        opmodeTimer.resetTimer();
+        follower.followPath(toShoot, true);
+        setState(State.DRIVE_TO_SHOOT_1, "start");
     }
 
     @Override
     public void loop() {
         follower.update();
         turret.update();
-        autonomousPathUpdate();
 
-        panelsTelemetry.debug("Path State", pathState);
-        panelsTelemetry.debug("X", follower.getPose().getX());
-        panelsTelemetry.debug("Y", follower.getPose().getY());
-        panelsTelemetry.debug("Heading", Math.toDegrees(follower.getPose().getHeading()));
-        panelsTelemetry.debug("Shooter ticks/sec", shooter.getCurrentVelocity());
-        panelsTelemetry.debug("Shooter at speed", shooter.atTargetVelocity());
-        panelsTelemetry.debug("Gate open", gate.isOpen());
-        panelsTelemetry.debug("Turret yaw deg", turret.getYawDegrees());
-        panelsTelemetry.update(telemetry);
+        // Global deadline. Whatever is happening, get to the park attempt with
+        // enough time left to finish it -- parking is worth real points and a
+        // frozen state machine cannot claim them.
+        if (opmodeTimer.getElapsedTimeSeconds() > PARK_DEADLINE
+                && state != State.PARK && state != State.DONE) {
+            abortToPark();
+        } else {
+            runStateMachine();
+        }
+
+        report();
     }
 
     @Override
@@ -144,96 +183,163 @@ public class BlueFarAuto extends OpMode {
     }
 
     /**
-     * State machine. Returns void: the original returned an int that was assigned
-     * back into pathState every loop, which resets the machine to 0 forever.
+     * True once the current path is done, stuck, or has taken too long.
+     *
+     * Three-way like 19859's FollowPathCommand.isFinished(), plus a timeout.
+     * isBusy() alone hangs forever on a robot pinned against a wall.
      */
-    private void autonomousPathUpdate() {
-        switch (pathState) {
+    private boolean pathDone() {
+        if (follower.isRobotStuck()) {
+            lastTransition = "path ended: ROBOT STUCK";
+            return true;
+        }
+        if (stateTimer.getElapsedTimeSeconds() > PATH_TIMEOUT) {
+            lastTransition = "path ended: TIMEOUT";
+            return true;
+        }
+        if (!follower.isBusy() || follower.atParametricEnd()) {
+            lastTransition = "path ended: complete";
+            return true;
+        }
+        return false;
+    }
 
-            case 0:  // drive to the shooting pose, spinning the flywheel up on the way
-                shooter.setTargetVelocity(RobotConstants.SHOOTER_TARGET_TICKS_PER_SEC);
-                follower.followPath(toShoot, true);
-                setPathState(1);
-                break;
+    private void runStateMachine() {
+        switch (state) {
 
-            case 1:  // SHOT 1 (preload) -- after segment 1
-                if (!follower.isBusy() && shooter.atTargetVelocity()) {
-                    gate.open();
-                    setPathState(2);
+            case DRIVE_TO_SHOOT_1:
+                if (pathDone()) {
+                    beginShot(State.SHOOT_1);
                 }
                 break;
 
-            case 2:
-                if (pathTimer.getElapsedTimeSeconds() > RobotConstants.GATE_FEED_SECONDS) {
-                    gate.close();
+            case SHOOT_1:
+                if (shotComplete()) {
                     intake.intake();
                     follower.followPath(pickup1, true);
-                    setPathState(3);
+                    setState(State.DRIVE_PICKUP_1, "shot 1 done");
                 }
                 break;
 
-            case 3:  // collected -- head back to shoot
-                if (!follower.isBusy()) {
+            case DRIVE_PICKUP_1:
+                if (pathDone()) {
                     intake.stop();
                     follower.followPath(toShoot1, true);
-                    setPathState(4);
+                    setState(State.DRIVE_TO_SHOOT_2, "pickup 1 done");
                 }
                 break;
 
-            case 4:  // SHOT 2 -- after segment 4
-                if (!follower.isBusy() && shooter.atTargetVelocity()) {
-                    gate.open();
-                    setPathState(5);
+            case DRIVE_TO_SHOOT_2:
+                if (pathDone()) {
+                    beginShot(State.SHOOT_2);
                 }
                 break;
 
-            case 5:
-                if (pathTimer.getElapsedTimeSeconds() > RobotConstants.GATE_FEED_SECONDS) {
-                    gate.close();
+            case SHOOT_2:
+                if (shotComplete()) {
                     intake.intake();
                     follower.followPath(pickup2, true);
-                    setPathState(6);
+                    setState(State.DRIVE_PICKUP_2, "shot 2 done");
                 }
                 break;
 
-            case 6:
-                if (!follower.isBusy()) {
+            case DRIVE_PICKUP_2:
+                if (pathDone()) {
                     intake.stop();
                     follower.followPath(toShoot2, true);
-                    setPathState(7);
+                    setState(State.DRIVE_TO_SHOOT_3, "pickup 2 done");
                 }
                 break;
 
-            case 7:  // SHOT 3 -- after segment 7
-                if (!follower.isBusy() && shooter.atTargetVelocity()) {
-                    gate.open();
-                    setPathState(8);
+            case DRIVE_TO_SHOOT_3:
+                if (pathDone()) {
+                    beginShot(State.SHOOT_3);
                 }
                 break;
 
-            case 8:
-                if (pathTimer.getElapsedTimeSeconds() > RobotConstants.GATE_FEED_SECONDS) {
-                    gate.close();
+            case SHOOT_3:
+                if (shotComplete()) {
                     shooter.stop();
                     intake.stop();
                     follower.followPath(park, true);
-                    setPathState(9);
+                    setState(State.PARK, "shot 3 done");
                 }
                 break;
 
-            case 9:  // parked
-                if (!follower.isBusy()) {
-                    setPathState(-1);
+            case PARK:
+                if (pathDone()) {
+                    setState(State.DONE, "parked");
                 }
                 break;
 
+            case DONE:
             default:
                 break;
         }
     }
 
-    private void setPathState(int state) {
-        pathState = state;
-        pathTimer.resetTimer();
+    private void beginShot(State shotState) {
+        feeding = false;
+        setState(shotState, "arrived at shoot pose");
+    }
+
+    /**
+     * Runs one volley and reports when it is finished.
+     *
+     * Waits for the flywheel, but ONLY up to SPINUP_TIMEOUT -- then it fires
+     * regardless. A shot at slightly-low speed may miss; a shot that never
+     * happens guarantees the rest of the auto never happens either.
+     */
+    private boolean shotComplete() {
+        if (!feeding) {
+            boolean atSpeed = shooter.atTargetVelocity();
+            boolean waitedLongEnough = stateTimer.getElapsedTimeSeconds() > SPINUP_TIMEOUT;
+            if (atSpeed || waitedLongEnough) {
+                gate.open();
+                feeding = true;
+                feedTimer.resetTimer();
+                lastTransition = atSpeed ? "fired: at speed" : "fired: SPINUP TIMEOUT";
+            }
+            return false;
+        }
+
+        if (feedTimer.getElapsedTimeSeconds() > RobotConstants.GATE_FEED_SECONDS) {
+            gate.close();
+            feeding = false;
+            return true;
+        }
+        return false;
+    }
+
+    /** Global-deadline escape: stop everything scoring-related and run the park path. */
+    private void abortToPark() {
+        gate.close();
+        shooter.stop();
+        intake.stop();
+        follower.followPath(park, true);
+        setState(State.PARK, "ABORT: park deadline reached");
+    }
+
+    private void setState(State next, String why) {
+        state = next;
+        lastTransition = why;
+        stateTimer.resetTimer();
+    }
+
+    private void report() {
+        panelsTelemetry.debug("State", state);
+        panelsTelemetry.debug("Last transition", lastTransition);
+        panelsTelemetry.debug("State time (s)", stateTimer.getElapsedTimeSeconds());
+        panelsTelemetry.debug("Auto time (s)", opmodeTimer.getElapsedTimeSeconds());
+        panelsTelemetry.debug("X", follower.getPose().getX());
+        panelsTelemetry.debug("Y", follower.getPose().getY());
+        panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
+        panelsTelemetry.debug("Follower busy", follower.isBusy());
+        panelsTelemetry.debug("Robot stuck", follower.isRobotStuck());
+        panelsTelemetry.debug("Shooter ticks/sec", shooter.getCurrentVelocity());
+        panelsTelemetry.debug("Shooter at speed", shooter.atTargetVelocity());
+        panelsTelemetry.debug("Gate open", gate.isOpen());
+        panelsTelemetry.debug("Turret yaw (deg)", turret.getYawDegrees());
+        panelsTelemetry.update(telemetry);
     }
 }

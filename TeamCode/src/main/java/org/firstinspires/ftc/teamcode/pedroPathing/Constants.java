@@ -52,8 +52,8 @@ public class Constants {
             // to false) -- there is no separate enable flag to set.
             .predictiveBrakingCoefficients(new PredictiveBrakingCoefficients(
                     0.15,                   // P
-                    0.06871916614647798,    // kLinearBraking
-                    0.0018502244719814955   // kQuadraticFriction
+                    0.09175869900913709,    // kLinearBraking
+                    0.001674576037470166    // kQuadraticFriction
             ))
 
             // Translational PIDF -- TUNED ON THIS ROBOT via the Translational Tuner.

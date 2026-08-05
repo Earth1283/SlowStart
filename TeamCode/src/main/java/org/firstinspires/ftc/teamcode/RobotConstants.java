@@ -111,19 +111,28 @@ public class RobotConstants {
      *     absolute bearing = atan2(6-19, 138-67) = -10.4 deg
      *     turret relative  = -10.4 - 120         = -130.4 deg
      *
-     * CORRECTED ON ROBOT: the derived -130.4 parked the turret 180 degrees backwards in
-     * both TeleOp and Auto, so +180 was applied: -130.4 + 180 = 49.6.
+     * MEASURED ON ROBOT, and this supersedes both the derivation and an earlier
+     * "180 degrees backwards" report. The turret was nudged by hand until it physically
+     * pointed forward-and-right (at the goal), and telemetry then read:
+     *     commanded -134.15 deg, actual -133.19 deg
+     * So -134.15 is the value that actually aims this robot.
      *
-     * Assumption 2 above is what broke -- the turret's zero does NOT point straight ahead
-     * on this robot, it points straight back. That is a mounting/gearing fact, not a
-     * tuning value, so it will hold until the turret is rebuilt.
+     * Note how close that is to the ORIGINAL derived -130.4 -- 3.75 deg apart. The
+     * derivation was right; the intermediate +180 correction to 49.6 was wrong and has
+     * been reverted. A measured number beats a derived one, but it is worth recording
+     * that the two agree, because it means the field-frame and sign assumptions behind
+     * the derivation both held.
      *
-     * Still unverified: assumption 3, the SIGN. A 180 error and a sign error look
-     * different -- 180 was backwards, a sign error would be mirrored left/right. If the
-     * turret now points roughly at the goal but mirrored across the robot's centerline,
-     * negate this instead of adjusting it.
+     * WHY THE EARLIER READING DISAGREED -- and this is the real hazard here:
+     * MultiAxisTurret.init() runs STOP_AND_RESET_ENCODER, so zero is wherever the turret
+     * HAPPENED TO BE SITTING when INIT was pressed. Every angle in this file is relative
+     * to that. Park the turret in the same physical orientation before every INIT, or
+     * this constant silently means something different run to run -- which is exactly
+     * how one run reads "180 backwards" and the next reads correct with no code change.
+     * A homing switch on the unused "rts" digital input would make this absolute and
+     * remove the whole class of problem.
      */
-    public static double TURRET_PARK_YAW_DEG = 49.6;
+    public static double TURRET_PARK_YAW_DEG = -134.15;
     public static double TURRET_YAW_TOLERANCE_DEG = 2.0;
     public static double TURRET_HOLD_POWER = 0.3;
 
