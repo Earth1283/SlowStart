@@ -41,13 +41,11 @@ public class BlueFarAuto extends OpMode {
     public static double BLUE_GOAL_Y = robotConstants.BLUE_TARGET_X;
     public static double YAW_OFFSET = 0.0;
 
-    // Their timings, unchanged. AUTO_FAR_WAIT_FOR_SHOOT is 400 ms in the kernel;
-    // their preload gets +800 ms because the flywheel starts from cold.
     public static long WAIT_FOR_SHOOT_MS = autoConstants.AUTO_FAR_WAIT_FOR_SHOOT;
     public static long PRELOAD_EXTRA_MS = 800;
     public static long TOTAL_SHOOT_TIME_MS = 550;
 
-    // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
+    // Safety rails. Totally not from 32008
     public static double PATH_TIMEOUT = 6.0;
     public static double PARK_DEADLINE = 25.0;
 
@@ -188,13 +186,6 @@ public class BlueFarAuto extends OpMode {
         autoAim.stop();
     }
 
-    /**
-     * Feeds AutoAim the live Pedro pose. AutoAim drives the turret and the hood
-     * itself and hands back the flywheel speed for this range.
-     *
-     * Their teleop applies the shooter's offset from the centre of rotation at the
-     * call site (V2 tests/AASSTEST.java:83); same here.
-     */
     private void updateAim() {
         Pose p = follower.getPose();
         Vector v = follower.getVelocity();
@@ -206,12 +197,11 @@ public class BlueFarAuto extends OpMode {
                 shooterX, shooterY,
                 v.getXComponent(), v.getYComponent(),
                 headingDeg,
-                // Pedro reports heading rate in RADIANS/sec; AutoAim wants degrees.
-                Math.toDegrees(follower.getAngularVelocity()),
+                Math.toDegrees(follower.getAngularVelocity()), // average day of pedro and ftc
                 BLUE_GOAL_X, BLUE_GOAL_Y,
-                false, 0.0,          // isManualMode, manualDist -- always solve from pose
-                false,               // isShootOnTheMove -- this auto stops to shoot
-                !follower.isBusy(),  // isBraking
+                false, 0.0,
+                false,
+                !follower.isBusy(),
                 YAW_OFFSET);
     }
 
@@ -242,10 +232,6 @@ public class BlueFarAuto extends OpMode {
         return false;
     }
 
-    /**
-     * One volley, their order from BLUE_FAR_18 -- gate open, wait, fire, wait,
-     * gate close. Pure timers: the aim solve is never consulted here.
-     */
     private boolean shotComplete() {
         switch (shotPhase) {
 

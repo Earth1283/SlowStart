@@ -10,28 +10,6 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 
-/**
- * Two-axis {@link Turret} for team 32008: yaw motor "lt" plus pitch/hood servo
- * "panel".
- *
- * Rebuilt to match 32008's own competition-verified Shooter.java (FTC-32008 V2).
- * Three things came from there that were previously wrong or missing here:
- *
- *   1. THE MOTOR IS REVERSED. V2 calls setDirection(REVERSE) on the turret. This
- *      was absent before, which inverts the sense of every commanded angle.
- *   2. POSITIONAL PIDF P = 20, via setPositionPIDFCoefficients. Without it the
- *      turret runs the SDK default and settles slowly or hunts.
- *   3. FULL POWER under RUN_TO_POSITION, not a 0.3 holding power. RUN_TO_POSITION
- *      treats power as a speed CAP, not applied effort, so 0.3 just made every
- *      move sluggish.
- *
- * Scale is 360 deg over 1229 ticks (V2), replacing a borrowed 180/668 that made
- * every angle land ~8.7% short while telemetry reported the requested value.
- *
- * The encoder is zeroed at init, so yaw is measured RELATIVE TO WHERE THE TURRET
- * SITS WHEN INIT IS PRESSED. Park it the same way every time, or wire a homing
- * switch to the unused "rts" digital input to make it absolute.
- */
 public class MultiAxisTurret implements Turret {
 
     private DcMotorEx yaw;
@@ -66,7 +44,6 @@ public class MultiAxisTurret implements Turret {
                 + clamped * (robotConstants.HOOD_UPPER_LIMIT - robotConstants.HOOD_LOWER_LIMIT));
     }
 
-    /** Aims both axes for a target at {@code distanceInches}, using V2's distance model. */
     public void aimForDistance(double yawDegrees, double distanceInches) {
         setSetpoint(yawDegrees, robotConstants.hoodPercentForDistance(distanceInches));
     }

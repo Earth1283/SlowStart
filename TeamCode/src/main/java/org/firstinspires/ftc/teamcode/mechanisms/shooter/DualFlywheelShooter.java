@@ -9,20 +9,6 @@ import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 
-/**
- * Two-motor flywheel {@link Shooter} for team 32008 ("ls" and "rs").
- *
- * Matches 32008's own competition-verified Shooter.java (FTC-32008 V2): left
- * motor reversed, RUN_USING_ENCODER, FLOAT at zero power so a spinning flywheel
- * is never braked hard, and velocity read as the MEAN of both motors.
- *
- * Velocity PIDF is re-applied on every setTargetVelocity(), exactly as V2 does.
- * That looks redundant but is deliberate: it means a coefficient edited live in
- * Panels takes effect on the next command instead of requiring a restart.
- *
- * Speeds are ENCODER TICKS PER SECOND throughout -- what setVelocity() natively
- * takes, so no counts-per-revolution conversion exists to get wrong.
- */
 public class DualFlywheelShooter implements Shooter {
 
     private DcMotorEx left, right;
@@ -57,16 +43,10 @@ public class DualFlywheelShooter implements Shooter {
         right.setVelocity(ticksPerSecond);
     }
 
-    /** Commands the speed V2's model wants for a target at {@code distanceInches}. */
     public void setForDistance(double distanceInches) {
         setTargetVelocity(robotConstants.velocityForDistance(distanceInches));
     }
 
-    /**
-     * Keeps the flywheel spinning at a low idle between shots (V2's shooterHold).
-     * Cheaper than spinning up from zero every time and easier on the battery
-     * than holding full shooting speed across the whole match.
-     */
     public void hold() {
         setTargetVelocity(robotConstants.SHOOTER_HOLD_VELOCITY);
     }

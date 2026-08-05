@@ -7,13 +7,6 @@ import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 
-/**
- * Roller-type {@link Intake} for team 32008 ("intake").
- *
- * Powers match 32008's own competition-verified Intake.java (FTC-32008 V2):
- * collect at 0.8, eject at full reverse. Note V2 does NOT reverse this motor's
- * direction -- the commented-out setDirection call in their source is left off.
- */
 public class RollerIntake implements Intake {
 
     private DcMotor roller;
