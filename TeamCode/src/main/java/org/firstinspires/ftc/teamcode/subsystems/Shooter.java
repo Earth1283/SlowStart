@@ -58,6 +58,11 @@ public class Shooter {
     public static double SHOOTER_HOOD_D = 0.408032;
     public static double SHOOTER_MIN_HOOD_PERCENT = 0.0;
     public static double SHOOTER_MAX_HOOD_PERCENT = 1.0;
+    public static double AIRTIME_K = 0.003097283;
+    public static double AIRTIME_G = 386.22;
+    public static double TRAJECTORY_M = 1.3540990329400013;
+    public static double TRAJECTORY_N = -0.4305736274862209;
+    public static double TRAJECTORY_MAX_VELOCITY = 2100.0;
 
     public void init(HardwareMap hardwareMap) {
         leftShooter = hardwareMap.get(DcMotorEx.class, LEFT_SHOOTER);
@@ -79,6 +84,74 @@ public class Shooter {
         turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         turret.setDirection(DcMotorSimple.Direction.REVERSE);
         turret.setPositionPIDFCoefficients(20);
+    }
+
+    /**
+     * Their init(hardwareMap, aass) overload. Pass aass = true when
+     * {@link AutoAimSubsystem} is running: it then owns the turret AND the hood,
+     * and this class must not grab them or the two fight over the same motor.
+     */
+    public void init(HardwareMap hardwareMap, boolean aass) {
+        leftShooter = hardwareMap.get(DcMotorEx.class, LEFT_SHOOTER);
+        rightShooter = hardwareMap.get(DcMotorEx.class, RIGHT_SHOOTER);
+
+        leftShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        rightShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        leftShooter.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        leftShooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        rightShooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+
+        leftShooter.setVelocityPIDFCoefficients(SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF);
+        rightShooter.setVelocityPIDFCoefficients(SHOOTER_KP, SHOOTER_KI, SHOOTER_KD, SHOOTER_KF);
+
+        if (!aass) {
+            turret = hardwareMap.get(DcMotorEx.class, TURRET);
+            turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            turret.setDirection(DcMotorSimple.Direction.REVERSE);
+            turret.setPositionPIDFCoefficients(20);
+            hood = hardwareMap.get(Servo.class, HOOD);
+        }
+    }
+
+    public static double surfaceZ(double x, double y, double k, double g, double m, double n) {
+        return ((k * x) * (k * x) / g) * Math.sin(2 * (m * y + n));
+    }
+
+    public static double zOfT(double t, double k, double g, double m, double n) {
+        double x = TRAJECTORY_MAX_VELOCITY * t;
+        double y = t;
+        return surfaceZ(x, y, k, g, m, n);
+    }
+
+    public static double solveForT(double targetZ, double k, double g, double m, double n) {
+        double lo = Math.max(0, -n / m);
+        double hi = 0.8;
+
+        while (zOfT(hi, k, g, m, n) < targetZ && hi < 1.0) {
+            hi += 0.01;
+        }
+
+        for (int i = 0; i < 80; i++) {
+            double mid = 0.5 * (lo + hi);
+            double zMid = zOfT(mid, k, g, m, n);
+
+            if (zMid < targetZ) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        return 0.5 * (lo + hi);
+    }
+
+    public static double calculateAirtime(double rangeInches) {
+        double t = solveForT(rangeInches, AIRTIME_K, AIRTIME_G, TRAJECTORY_M, TRAJECTORY_N);
+        double velocity = TRAJECTORY_MAX_VELOCITY * t;
+        double launchAngle = TRAJECTORY_M * t + TRAJECTORY_N;
+        return (2 * AIRTIME_K * velocity * Math.sin(launchAngle)) / AIRTIME_G;
     }
 
     /** Zeroes the turret encoder. Their autoInit calls this -- 0 deg = turret as placed at INIT. */

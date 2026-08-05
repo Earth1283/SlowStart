@@ -6,55 +6,52 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Vector;
 import com.pedropathing.paths.PathChain;
 import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
 import org.firstinspires.ftc.teamcode.kernel.constants.autoConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 import org.firstinspires.ftc.teamcode.kernel.motion.GoTo;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 
 /**
  * Team 32008 -- DECODE 2025-26 -- BLUE FAR autonomous.
  *
- * This is 32008's own auto/BLUE_FAR_18.java sequence, driving their own
- * subsystems/Shooter.java and subsystems/Intake.java (copied verbatim into
- * teamcode/subsystems). THE ONLY THING CHANGED IS THE PATH -- and the two
- * numbers the path forces to change, derived below.
+ * 32008's own subsystems, copied verbatim into teamcode/subsystems:
+ * {@link AutoAimSubsystem} (turret + hood + shot solve), {@link Shooter}
+ * (flywheels), {@link Intake} (roller + both gates). Only the PATH is this
+ * team's own.
  *
- * Their FTCLib SequentialCommandGroup is expressed as a plain timed state
- * machine because FTCLib is not a dependency of this repo. Same calls, same
- * order, same waits.
+ * WHY AUTOAIM INSTEAD OF A FIXED DISTANCE
+ * ---------------------------------------
+ * The previous version commanded autoConstants.FAR_FIRE_DISTANCE = 126.5 for
+ * every shot. Two problems, both of which showed up on the field:
  *
- * WHY THE TURRET ANGLE IS NOT -70
- * -------------------------------
- * autoConstants.BLUE_FAR_TURRET = -70 is measured from THEIR shoot pose,
- * (59, 17) at heading 180 deg. The turret angle is RELATIVE TO THE ROBOT, so
- * rotating the shoot pose rotates the required angle with it. This path shoots
- * from (66.7, 19.0) at heading 120 deg, so -70 pointed ~65 deg off -- across the
- * field at the RED goal, which is the reported symptom.
+ *   1. FAR_FIRE_DISTANCE and FAR_HOLD_DISTANCE are BOTH 126.5, so `distance`
+ *      never changed and the hood was pinned at one position all match -- the
+ *      "hood doesn't move" symptom. It was being commanded; it just had nothing
+ *      to move to.
+ *   2. 126.5 is a number 32008 hand-tuned for their own shot. This path's shoot
+ *      pose is 134.95 in from the goal, so firing it as 126.5 under-speeds the
+ *      flywheel by ~3% and the shot lands short.
  *
- * Re-solved for this path's shoot pose, against the blue goal in the PEDRO
- * frame. The kernel states goals in the PINPOINT frame (pinX = pedroY,
- * pinY = 144 - pedroX, per V2 tests/AASSTEST.java:59), so kernel BLUE_TARGET
- * (136, 136) is Pedro (8, 136); Pedro (136, 136) is the RED goal.
+ * AutoAim solves range from the live pose every loop and feeds both the flywheel
+ * and the hood from it, so neither number has to be guessed.
  *
- * The solve is validated by reproducing their own verified numbers:
+ * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The gate and intake run on plain
+ * timers, and the flywheel is commanded every loop with a shooterHold() fallback.
+ * An earlier version made the gate wait for aim lock, and one bad solve silently
+ * killed the shooter, hood, gate and intake together.
  *
- *   their preload pose -> -70.03 deg solved vs -70.5 tuned   (0.47 off)
- *   their shoot pose   -> -67.79 deg solved vs -70.0 tuned   (2.21 off)
- *   their red pose     -> +67.79 deg solved vs +70.0 tuned   (2.21 off)
- *
- * and the same solve puts THIS path's shoot pose at 134.95 in range, which after
- * their own -8.46 in trim is 126.49 -- i.e. it independently reproduces
- * autoConstants.FAR_FIRE_DISTANCE = 126.5. That is the cross-check that says the
- * geometry is right rather than merely self-consistent.
- *
- * All three of this path's shoot poses are the same spot within 0.4 in, so one
- * turret angle and one distance cover all three shots.
+ * FIELD FRAME: the kernel states goals in the PINPOINT frame (pinX = pedroY,
+ * pinY = 144 - pedroX, per V2 tests/AASSTEST.java:59). Converted to Pedro below.
+ * Blue is (8, 136); (136, 136) is the RED goal.
  */
 @Autonomous(name = "32008 Blue Far Auto", group = "32008")
 @Configurable
@@ -76,17 +73,16 @@ public class BlueFarAuto extends OpMode {
     private static final Pose SHOOT_3_POSE  = new Pose(67.119, 19.121, Math.toRadians(120));
     private static final Pose PARK_POSE     = new Pose(57.735, 26.906, Math.toRadians(120));
 
-    /**
-     * Turret angle for THIS path's shoot pose, degrees, replacing their -70.
-     * Solved -4.76; per-shot spread across the three shoot poses is 0.2 deg, so
-     * one value covers all three. Trim here in Panels if shots pull left/right.
-     */
-    public static double BLUE_FAR_TURRET = -4.76;
+    /** BLUE goal, PEDRO frame. Must read 8 / 136 -- 136 / 136 is the RED goal. */
+    public static double BLUE_GOAL_X = 144.0 - robotConstants.BLUE_TARGET_Y;
+    public static double BLUE_GOAL_Y = robotConstants.BLUE_TARGET_X;
 
-    /** Their FAR_FIRE_DISTANCE. This path's geometry independently gives 126.49. */
-    public static double FIRE_DISTANCE = autoConstants.FAR_FIRE_DISTANCE;
-    /** Their FAR_HOLD_DISTANCE -- what the shooter idles at between volleys. */
-    public static double HOLD_DISTANCE = autoConstants.FAR_HOLD_DISTANCE;
+    /**
+     * Turret mounting trim, degrees, passed straight to AutoAim's yawOffset.
+     * Their own verified angles sit ~2.2 deg off the pure geometric solve, well
+     * inside the 5 deg lock tolerance at this range, so 0 is the honest default.
+     */
+    public static double YAW_OFFSET = 0.0;
 
     // Their timings, unchanged. AUTO_FAR_WAIT_FOR_SHOOT is 400 ms in the kernel;
     // their preload gets +800 ms because the flywheel starts from cold.
@@ -112,6 +108,9 @@ public class BlueFarAuto extends OpMode {
     // 32008's own subsystems, copied verbatim.
     private final Shooter shooter = new Shooter();
     private final Intake intake = new Intake();
+    private final AutoAimSubsystem autoAim = new AutoAimSubsystem();
+
+    private AutoAimSubsystem.TurretCommand aim = new AutoAimSubsystem.TurretCommand();
 
     private PathChain pickup1, pickup2, park;
 
@@ -120,11 +119,9 @@ public class BlueFarAuto extends OpMode {
     private final Timer opmodeTimer = new Timer();
     private final Timer shotTimer = new Timer();
 
-    /** Drives the shooter every loop, exactly as their loop() does. */
-    private double distance = autoConstants.FAR_HOLD_DISTANCE;
-
     private int shotPhase = 0;
     private boolean preloadDone = false;
+    private boolean shooterLive = false;
     private String lastTransition = "none";
 
     @Override
@@ -135,13 +132,13 @@ public class BlueFarAuto extends OpMode {
         follower.setStartingPose(START_POSE);
         goTo = new GoTo(follower);
 
-        // Their Robot.autoInit(): intake, shooter, then zero the turret encoder.
         intake.init(hardwareMap);
-        shooter.init(hardwareMap);
-        shooter.reset();
+        // aass = true: AutoAim owns turret "lt" AND hood "panel". Without this
+        // both classes grab the turret and fight over its run mode.
+        shooter.init(hardwareMap, true);
+        autoAim.init(hardwareMap);
 
         intake.gateClose();
-        distance = HOLD_DISTANCE;
 
         buildPaths();
 
@@ -156,8 +153,10 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.debug("X", follower.getPose().getX());
         panelsTelemetry.debug("Y", follower.getPose().getY());
         panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
-        panelsTelemetry.debug("Turret ticks", shooter.getTurretPosition());
-        panelsTelemetry.debug("Turret deg", shooter.getTurretDegree());
+        panelsTelemetry.debug("Blue goal X (Pedro)", BLUE_GOAL_X);
+        panelsTelemetry.debug("Blue goal Y (Pedro)", BLUE_GOAL_Y);
+        panelsTelemetry.debug("Turret ticks", autoAim.getCurrentTick());
+        panelsTelemetry.debug("Turret deg", autoAim.getCurrentTurretAngle());
         panelsTelemetry.update(telemetry);
     }
 
@@ -189,8 +188,7 @@ public class BlueFarAuto extends OpMode {
     public void start() {
         follower.activateAllPIDFs();
 
-        // Point the turret now so it is settled by the time the robot arrives.
-        shooter.turretToDegree(BLUE_FAR_TURRET);
+        shooterLive = true;
 
         opmodeTimer.resetTimer();
         goTo.goTo(START_POSE, SHOOT_POSE);
@@ -201,10 +199,11 @@ public class BlueFarAuto extends OpMode {
     public void loop() {
         follower.update();
 
-        // Their loop() does exactly this every iteration: the flywheel AND the hood
-        // are commanded continuously from `distance`. Nothing moves if this is not
-        // called every loop.
-        shooter.setShooterByDis(distance);
+        // Aim + shooter run EVERY loop, unconditionally. Nothing below is allowed
+        // to depend on the state machine, and the state machine is not allowed to
+        // depend on the aim solve.
+        updateAim();
+        driveShooter();
 
         if (opmodeTimer.getElapsedTimeSeconds() > PARK_DEADLINE
                 && state != State.PARK && state != State.DONE) {
@@ -221,6 +220,50 @@ public class BlueFarAuto extends OpMode {
         shooter.shooterStop();
         intake.intakeStop();
         intake.gateClose();
+        autoAim.stop();
+    }
+
+    /**
+     * Feeds AutoAim the live Pedro pose. AutoAim drives the turret and the hood
+     * itself and hands back the flywheel speed for this range.
+     *
+     * Their teleop applies the shooter's offset from the centre of rotation at the
+     * call site (V2 tests/AASSTEST.java:83); same here.
+     */
+    private void updateAim() {
+        Pose p = follower.getPose();
+        Vector v = follower.getVelocity();
+        double headingDeg = Math.toDegrees(p.getHeading());
+        double shooterX = p.getX() + Math.cos(p.getHeading()) * robotConstants.SHOOTER_DRIVETRAIN_OFFSET;
+        double shooterY = p.getY() + Math.sin(p.getHeading()) * robotConstants.SHOOTER_DRIVETRAIN_OFFSET;
+
+        aim = autoAim.update(
+                shooterX, shooterY,
+                v.getXComponent(), v.getYComponent(),
+                headingDeg,
+                // Pedro reports heading rate in RADIANS/sec; AutoAim wants degrees.
+                Math.toDegrees(follower.getAngularVelocity()),
+                BLUE_GOAL_X, BLUE_GOAL_Y,
+                false, 0.0,          // isManualMode, manualDist -- always solve from pose
+                false,               // isShootOnTheMove -- this auto stops to shoot
+                !follower.isBusy(),  // isBraking
+                YAW_OFFSET);
+    }
+
+    /**
+     * Commands the flywheel every loop. Falls back to their shooterHold() rather
+     * than to zero when the solve has no target, so a momentary bad solve cannot
+     * spin the shooter down mid-volley.
+     */
+    private void driveShooter() {
+        if (!shooterLive) {
+            return;
+        }
+        if (aim.hasTarget && aim.targetRpm > 0.0) {
+            shooter.setShooterVelocity(aim.targetRpm);
+        } else {
+            shooter.shooterHold();
+        }
     }
 
     private boolean pathDone() {
@@ -240,20 +283,13 @@ public class BlueFarAuto extends OpMode {
     }
 
     /**
-     * One volley, their exact order from BLUE_FAR_18:
-     *
-     *   distance = FIRE_DISTANCE; turretToDegree; gateOpen; intakeEngage
-     *   wait AUTO_FAR_WAIT_FOR_SHOOT   (preload waits +800)
-     *   intakeFire(calculateIntakePower())
-     *   wait TOTAL_SHOOT_TIME
-     *   gateClose; intakeDisengage; distance = HOLD_DISTANCE
+     * One volley, their order from BLUE_FAR_18 -- gate open, wait, fire, wait,
+     * gate close. Pure timers: the aim solve is never consulted here.
      */
     private boolean shotComplete() {
         switch (shotPhase) {
 
             case 0:
-                distance = FIRE_DISTANCE;
-                shooter.turretToDegree(BLUE_FAR_TURRET);
                 intake.gateOpen();
                 intake.intakeEngage();
                 shotTimer.resetTimer();
@@ -277,7 +313,6 @@ public class BlueFarAuto extends OpMode {
                     intake.gateClose();
                     intake.intakeDisengage();
                     intake.intakeStop();
-                    distance = HOLD_DISTANCE;
                     preloadDone = true;
                     shotPhase = 0;
                     lastTransition = "shot: done";
@@ -348,7 +383,7 @@ public class BlueFarAuto extends OpMode {
 
             case PARK:
                 if (pathDone()) {
-                    distance = 0;
+                    shooterLive = false;
                     shooter.shooterStop();
                     setState(State.DONE, "parked");
                 }
@@ -364,7 +399,6 @@ public class BlueFarAuto extends OpMode {
         intake.gateClose();
         intake.intakeStop();
         shotPhase = 0;
-        distance = HOLD_DISTANCE;
         follower.followPath(park, true);
         setState(State.PARK, "ABORT: park deadline reached");
     }
@@ -387,16 +421,23 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.debug("Follower busy", follower.isBusy());
         panelsTelemetry.debug("Robot stuck", follower.isRobotStuck());
 
-        panelsTelemetry.debug("distance (cmd)", distance);
-        panelsTelemetry.debug("Turret cmd (deg)", BLUE_FAR_TURRET);
-        panelsTelemetry.debug("Turret ticks", shooter.getTurretPosition());
-        panelsTelemetry.debug("Turret actual (deg)", shooter.getTurretDegree());
-        panelsTelemetry.debug("Turret busy", shooter.turret.isBusy());
-        panelsTelemetry.debug("Hood percent", shooter.getHoodPercent());
-        panelsTelemetry.debug("Shooter target", Shooter.targetVelocity);
+        panelsTelemetry.debug("Aim has target", aim.hasTarget);
+        panelsTelemetry.debug("Aim LOCKED", aim.isAimLocked);
+        panelsTelemetry.debug("Aim range (in)", aim.targetDist);
+        panelsTelemetry.debug("Aim error (deg)", aim.aimError);
+        panelsTelemetry.debug("Aim tolerance (deg)", aim.currentTolerance);
+        panelsTelemetry.debug("Aim flight time (s)", aim.flightTime);
+        panelsTelemetry.debug("Turret target (deg)", aim.targetTurretAngle);
+        panelsTelemetry.debug("Turret actual (deg)", autoAim.getCurrentTurretAngle());
+        panelsTelemetry.debug("Turret ticks", autoAim.getCurrentTick());
+
+        panelsTelemetry.debug("HOOD cmd (percent)", aim.targetPitch);
+        panelsTelemetry.debug("HOOD servo pos", autoAim.hood.getPosition());
+        panelsTelemetry.debug("Shooter target", aim.targetRpm);
         panelsTelemetry.debug("Shooter actual", shooter.getShooterVelocity());
-        panelsTelemetry.debug("Shooter ready", shooter.shooterReady());
+        panelsTelemetry.debug("Shooter ready", shooter.shooterReady(aim.targetRpm));
         panelsTelemetry.debug("Intake fire power", shooter.calculateIntakePower());
+        panelsTelemetry.debug("Battery (V)", autoAim.getCurrentBatteryVoltage());
         panelsTelemetry.update(telemetry);
     }
 }

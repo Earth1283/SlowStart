@@ -18,5 +18,8 @@ dependencies {
     implementation 'com.pedropathing:ftc:2.1.2'
     implementation 'com.pedropathing:telemetry:1.0.0'
     implementation 'com.bylazar:fullpanels:1.0.12'
+    // Required by subsystems/AutoAimSubsystem.java (PIDFController). Same version
+    // 32008 ships in FTC-32008 V2, so their file ports without modification.
+    implementation 'org.ftclib.ftclib:core:2.1.1'
 }
 
