@@ -3,7 +3,8 @@ package org.firstinspires.ftc.teamcode.mechanisms.gate;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
-import org.firstinspires.ftc.teamcode.RobotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 
 /**
  * Two-servo {@link Gate} for team 32008 ("lg" and "rg"), opened and closed
@@ -25,22 +26,22 @@ public class DualServoGate implements Gate {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        leftGate  = hardwareMap.get(Servo.class, RobotConstants.LEFT_GATE_NAME);
-        rightGate = hardwareMap.get(Servo.class, RobotConstants.RIGHT_GATE_NAME);
+        leftGate  = hardwareMap.get(Servo.class, robotConfigs.LEFT_GATE);
+        rightGate = hardwareMap.get(Servo.class, robotConfigs.RIGHT_GATE);
         close();
     }
 
     @Override
     public void open() {
-        leftGate.setPosition(RobotConstants.LEFT_GATE_OPEN);
-        rightGate.setPosition(RobotConstants.RIGHT_GATE_OPEN);
+        leftGate.setPosition(robotConstants.LEFT_GATE_OPEN);
+        rightGate.setPosition(robotConstants.RIGHT_GATE_OPEN);
         open = true;
     }
 
     @Override
     public void close() {
-        leftGate.setPosition(RobotConstants.LEFT_GATE_CLOSE);
-        rightGate.setPosition(RobotConstants.RIGHT_GATE_CLOSE);
+        leftGate.setPosition(robotConstants.LEFT_GATE_CLOSE);
+        rightGate.setPosition(robotConstants.RIGHT_GATE_CLOSE);
         open = false;
     }
 

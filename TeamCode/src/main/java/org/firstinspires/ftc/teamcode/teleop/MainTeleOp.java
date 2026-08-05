@@ -10,6 +10,8 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.RobotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.DualServoGate;
 import org.firstinspires.ftc.teamcode.mechanisms.gate.Gate;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
@@ -46,10 +48,10 @@ public class MainTeleOp extends LinearOpMode {
     public void runOpMode() {
         panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
 
-        leftFront  = hardwareMap.get(DcMotorEx.class, "lf");
-        leftBack   = hardwareMap.get(DcMotorEx.class, "lb");
-        rightFront = hardwareMap.get(DcMotorEx.class, "rf");
-        rightBack  = hardwareMap.get(DcMotorEx.class, "rb");
+        leftFront  = hardwareMap.get(DcMotorEx.class, robotConfigs.LEFT_FRONT);
+        leftBack   = hardwareMap.get(DcMotorEx.class, robotConfigs.LEFT_BACK);
+        rightFront = hardwareMap.get(DcMotorEx.class, robotConfigs.RIGHT_FRONT);
+        rightBack  = hardwareMap.get(DcMotorEx.class, robotConfigs.RIGHT_BACK);
 
         // Same directions as pedroPathing/Constants.java and 19859's teleop.
         leftFront.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -153,8 +155,8 @@ public class MainTeleOp extends LinearOpMode {
         if (gamepad1.dpad_down)  turretPitch  -= PITCH_NUDGE;
 
         turretYawDeg = Range.clip(turretYawDeg,
-                -RobotConstants.TURRET_FULL_RANGE_DEGREE,
-                 RobotConstants.TURRET_FULL_RANGE_DEGREE);
+                -robotConstants.TURRET_FULL_RANGE_DEGREE,
+                 robotConstants.TURRET_FULL_RANGE_DEGREE);
         turretPitch = Range.clip(turretPitch, 0.0, 1.0);
 
         turret.setSetpoint(turretYawDeg, turretPitch);

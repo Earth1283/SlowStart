@@ -8,6 +8,8 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.RobotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 
 /**
  * Two-axis {@link Turret} for team 32008: yaw motor "lt" plus pitch/hood servo
@@ -39,7 +41,7 @@ public class MultiAxisTurret implements Turret {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        yaw = hardwareMap.get(DcMotorEx.class, RobotConstants.TURRET_YAW_NAME);
+        yaw = hardwareMap.get(DcMotorEx.class, robotConfigs.TURRET);
 
         yaw.setDirection(DcMotorSimple.Direction.REVERSE);
         yaw.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -50,7 +52,7 @@ public class MultiAxisTurret implements Turret {
         yaw.setPower(RobotConstants.TURRET_HOLD_POWER);
         yaw.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        pitch = hardwareMap.get(Servo.class, RobotConstants.TURRET_PITCH_NAME);
+        pitch = hardwareMap.get(Servo.class, robotConfigs.HOOD);
     }
 
     @Override
@@ -61,8 +63,8 @@ public class MultiAxisTurret implements Turret {
         yaw.setPower(RobotConstants.TURRET_HOLD_POWER);
 
         double clamped = Range.clip(pitchPercent, 0.0, 1.0);
-        pitch.setPosition(RobotConstants.PITCH_MIN
-                + clamped * (RobotConstants.PITCH_MAX - RobotConstants.PITCH_MIN));
+        pitch.setPosition(robotConstants.HOOD_LOWER_LIMIT
+                + clamped * (robotConstants.HOOD_UPPER_LIMIT - robotConstants.HOOD_LOWER_LIMIT));
     }
 
     /** Aims both axes for a target at {@code distanceInches}, using V2's distance model. */
@@ -91,12 +93,12 @@ public class MultiAxisTurret implements Turret {
     }
 
     private double degreesToTicks(double degrees) {
-        return degrees * RobotConstants.TURRET_FULL_RANGE_ENCODER
-                / RobotConstants.TURRET_FULL_RANGE_DEGREE;
+        return degrees * robotConstants.TURRET_FULL_RANGE_ENCODER
+                / robotConstants.TURRET_FULL_RANGE_DEGREE;
     }
 
     private double ticksToDegrees(double ticks) {
-        return ticks / RobotConstants.TURRET_FULL_RANGE_ENCODER
-                * RobotConstants.TURRET_FULL_RANGE_DEGREE;
+        return ticks / robotConstants.TURRET_FULL_RANGE_ENCODER
+                * robotConstants.TURRET_FULL_RANGE_DEGREE;
     }
 }

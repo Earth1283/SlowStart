@@ -6,6 +6,8 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.RobotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
 
 /**
  * Two-motor flywheel {@link Shooter} for team 32008 ("ls" and "rs").
@@ -28,8 +30,8 @@ public class DualFlywheelShooter implements Shooter {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        left  = hardwareMap.get(DcMotorEx.class, RobotConstants.SHOOTER_LEFT_NAME);
-        right = hardwareMap.get(DcMotorEx.class, RobotConstants.SHOOTER_RIGHT_NAME);
+        left  = hardwareMap.get(DcMotorEx.class, robotConfigs.LEFT_SHOOTER);
+        right = hardwareMap.get(DcMotorEx.class, robotConfigs.RIGHT_SHOOTER);
 
         left.setDirection(DcMotorSimple.Direction.REVERSE);
 
@@ -41,10 +43,10 @@ public class DualFlywheelShooter implements Shooter {
     }
 
     private void applyPidf() {
-        left.setVelocityPIDFCoefficients(RobotConstants.SHOOTER_KP, RobotConstants.SHOOTER_KI,
-                RobotConstants.SHOOTER_KD, RobotConstants.SHOOTER_KF);
-        right.setVelocityPIDFCoefficients(RobotConstants.SHOOTER_KP, RobotConstants.SHOOTER_KI,
-                RobotConstants.SHOOTER_KD, RobotConstants.SHOOTER_KF);
+        left.setVelocityPIDFCoefficients(panelConstants.SHOOTER_KP, panelConstants.SHOOTER_KI,
+                panelConstants.SHOOTER_KD, panelConstants.SHOOTER_KF);
+        right.setVelocityPIDFCoefficients(panelConstants.SHOOTER_KP, panelConstants.SHOOTER_KI,
+                panelConstants.SHOOTER_KD, panelConstants.SHOOTER_KF);
     }
 
     @Override
@@ -81,7 +83,7 @@ public class DualFlywheelShooter implements Shooter {
             return false;
         }
         return Math.abs(getCurrentVelocity() - targetTicksPerSecond)
-                <= RobotConstants.SHOOTER_VELOCITY_TOLERANCE;
+                <= panelConstants.VELOCITY_TOR;
     }
 
     @Override

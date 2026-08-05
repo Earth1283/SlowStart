@@ -17,6 +17,8 @@ import org.firstinspires.ftc.teamcode.mechanisms.intake.Intake;
 import org.firstinspires.ftc.teamcode.mechanisms.intake.RollerIntake;
 import org.firstinspires.ftc.teamcode.mechanisms.shooter.DualFlywheelShooter;
 import org.firstinspires.ftc.teamcode.mechanisms.turret.MultiAxisTurret;
+import org.firstinspires.ftc.teamcode.kernel.constants.autoConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 /**
@@ -29,23 +31,28 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
  * 8-segment route, unchanged.
  * ============================================================================
  *
- * AIM IS COMPUTED, NOT HARDCODED. On arriving at a shooting pose the robot reads
- * its ACTUAL pose from the follower and solves:
+ * AIM USES 32008'S TUNED CONSTANTS, NOT COMPUTED GEOMETRY.
  *
- *     distance = hypot(goal - pose)
- *     bearing  = atan2(goal - pose)
- *     turret   = bearing - robot heading
- *     velocity = V2 cubic fit of distance
- *     hood     = V2 cubic fit of distance
+ * An earlier version of this file solved turret angle as (bearing - heading)
+ * toward BLUE_TARGET. That is WRONG on this robot, and kernel/constants proves
+ * it. Checked against 32008's verified values:
  *
- * That matters because the robot never stops exactly on the planned pose. A
- * hardcoded turret angle is only correct if the drive was perfect; solving from
- * the real pose self-corrects for whatever error the follower left behind. It
- * also means the three shooting stops need no separate constants -- and if the
- * path is edited later, the aim follows automatically.
+ *   blue far: bearing-heading = -122.9 deg, but BLUE_FAR_TURRET = -70
+ *   red far:  bearing-heading =  -10.0 deg, but RED_FAR_TURRET  = +70
  *
- * At the planned poses this evaluates to roughly: distance 136 in, turret
- * -60.6 deg, velocity 1938 ticks/sec, hood 0.88.
+ * The offset needed to reconcile those is 52.9 deg for blue and 80.0 for red --
+ * inconsistent, so the relationship is not geometric. The turret encoder is
+ * zeroed wherever the turret sits at INIT, so these angles are hand-tuned
+ * against that convention, not against the field frame. BLUE_TARGET is only
+ * used for the TeleOp handoff in 32008's code; their autos never aim from it.
+ *
+ * Likewise FIRE DISTANCE IS NOT DISTANCE. FAR_FIRE_DISTANCE is 126.5 while the
+ * true geometry from their shoot pose to the goal is 141.7 in. The gap absorbs
+ * goal height, shooter offset and drag. Feeding real geometry into the velocity
+ * curve overshoots by about 6% (1978 vs 1870 ticks/sec).
+ *
+ * The geometric solve is still computed and published to telemetry, purely so
+ * it can be compared while tuning -- it does not drive anything.
  *
  * ROBUSTNESS -- an auto that freezes cannot even park, so every wait is bounded:
  *   - each path ends on complete OR isRobotStuck() OR PATH_TIMEOUT
@@ -67,8 +74,18 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 @Configurable
 public class BlueFarAuto extends OpMode {
 
-    // ---- The team's own path (inches, Pedro field frame) ----
-    private static final Pose START_POSE    = new Pose(55.790,  8.210, Math.toRadians(90));
+    // ---- Path: 32008's VERIFIED start pose, the team's own route after that ----
+    //
+    // START comes from kernel autoConstants.BLUE_FAR_START -- (57.166, 7.362, 180 deg),
+    // the pose 32008 actually starts blue far from. .copy() because that Pose is a
+    // mutable static shared with every other auto; taking a reference would let one
+    // OpMode's edit leak into another's start position.
+    //
+    // The drawn path's own start was (55.790, 8.210, 90 deg): 1.6 in away in position
+    // (same physical spot) but 90 deg off in heading. Position was near enough to be
+    // interchangeable; the HEADING was not, and the verified one wins because the
+    // turret angles below are calibrated against it.
+    private static final Pose START_POSE    = autoConstants.BLUE_FAR_START.copy();
     private static final Pose SHOOT_POSE    = new Pose(66.723, 18.970, Math.toRadians(120));
     private static final Pose MID_1_POSE    = new Pose(48.906, 34.497, Math.toRadians(180));
     private static final Pose PICKUP_1_POSE = new Pose(11.004, 34.805, Math.toRadians(180));
@@ -84,6 +101,16 @@ public class BlueFarAuto extends OpMode {
     public static double PARK_DEADLINE = 25.0;
     /** Let the turret swing before firing, since it may travel 60+ degrees. */
     public static double TURRET_SETTLE_SECONDS = 0.35;
+
+    // ---- Aim, from 32008's kernel autoConstants. Tunable live in Panels. ----
+    /** Turret angle for the preload shot. 32008: BLUE_FAR_TURRET_PRELOAD. */
+    public static double TURRET_PRELOAD_DEG = autoConstants.BLUE_FAR_TURRET_PRELOAD;
+    /** Turret angle for every later shot. 32008: BLUE_FAR_TURRET. */
+    public static double TURRET_SHOT_DEG = autoConstants.BLUE_FAR_TURRET;
+    /** Tuned fire distance for the preload shot. 32008: FAR_FIRE_DISTANCE_PRELOAD. */
+    public static double FIRE_DISTANCE_PRELOAD = autoConstants.FAR_FIRE_DISTANCE_PRELOAD;
+    /** Tuned fire distance for every later shot. 32008: FAR_FIRE_DISTANCE. */
+    public static double FIRE_DISTANCE = autoConstants.FAR_FIRE_DISTANCE;
 
     private enum State {
         DRIVE_TO_SHOOT_1, SHOOT_1,
@@ -110,7 +137,10 @@ public class BlueFarAuto extends OpMode {
     private boolean aimed = false;
     private boolean feeding = false;
     private String lastTransition = "none";
-    private double aimDistance = 0, aimTurretDeg = 0, aimVelocity = 0, aimHood = 0;
+    private double aimTurretDeg = 0, aimVelocity = 0, aimHood = 0, aimFireDistance = 0;
+    /** Telemetry only -- what pure geometry would say. Does not drive anything. */
+    private double geoDistance = 0, geoTurretDeg = 0;
+    private boolean preloadShotDone = false;
 
     @Override
     public void init() {
@@ -143,9 +173,13 @@ public class BlueFarAuto extends OpMode {
     }
 
     private void buildPaths() {
+        // Interpolate FROM the real start heading, not the drawn one. START_POSE now
+        // carries 180 deg, so hardcoding the drawn 90 deg here would tell the follower
+        // to rotate from a heading the robot was never at -- it would spin 90 deg the
+        // wrong way at launch trying to reach a start it had already passed.
         toShoot = follower.pathBuilder()
                 .addPath(new BezierLine(START_POSE, SHOOT_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(120))
+                .setLinearHeadingInterpolation(START_POSE.getHeading(), Math.toRadians(120))
                 .build();
 
         pickup1 = follower.pathBuilder()
@@ -215,30 +249,40 @@ public class BlueFarAuto extends OpMode {
     }
 
     /**
-     * Solves aim from the robot's ACTUAL pose and commands shooter + turret.
+     * Commands shooter + turret from 32008's tuned constants.
      *
-     * Uses V2's own cubic fits, so this is the same model the verified robot
-     * shoots with -- not an approximation of it.
+     * The preload shot gets its own pair because the robot has not moved from
+     * the start yet; every later shot uses the standard pair.
      */
     private void aimAtGoal() {
-        Pose p = follower.getPose();
-        double dx = RobotConstants.BLUE_TARGET_X - p.getX();
-        double dy = RobotConstants.BLUE_TARGET_Y - p.getY();
+        aimTurretDeg    = preloadShotDone ? TURRET_SHOT_DEG : TURRET_PRELOAD_DEG;
+        aimFireDistance = preloadShotDone ? FIRE_DISTANCE   : FIRE_DISTANCE_PRELOAD;
 
-        aimDistance = Math.hypot(dx, dy);
-        double bearingDeg = Math.toDegrees(Math.atan2(dy, dx));
-        double headingDeg = Math.toDegrees(p.getHeading());
-
-        double rel = bearingDeg - headingDeg;
-        while (rel > 180.0)  rel -= 360.0;
-        while (rel < -180.0) rel += 360.0;
-        aimTurretDeg = rel;
-
-        aimVelocity = RobotConstants.velocityForDistance(aimDistance);
-        aimHood     = RobotConstants.hoodPercentForDistance(aimDistance);
+        aimVelocity = RobotConstants.velocityForDistance(aimFireDistance);
+        aimHood     = RobotConstants.hoodPercentForDistance(aimFireDistance);
 
         shooter.setTargetVelocity(aimVelocity);
         turret.setSetpoint(aimTurretDeg, aimHood);
+        preloadShotDone = true;
+
+        updateGeometryTelemetry();
+    }
+
+    /**
+     * Pure geometry toward the blue goal. TELEMETRY ONLY -- published so the two
+     * approaches can be compared on a real field. It is deliberately not wired
+     * to the turret; see the class comment for why it does not agree with the
+     * tuned values.
+     */
+    private void updateGeometryTelemetry() {
+        Pose p = follower.getPose();
+        double dx = robotConstants.BLUE_TARGET_X - p.getX();
+        double dy = robotConstants.BLUE_TARGET_Y - p.getY();
+        geoDistance = Math.hypot(dx, dy);
+        double rel = Math.toDegrees(Math.atan2(dy, dx)) - Math.toDegrees(p.getHeading());
+        while (rel > 180.0)  rel -= 360.0;
+        while (rel < -180.0) rel += 360.0;
+        geoTurretDeg = rel;
     }
 
     /** Path is done, stuck, or has taken too long. isBusy() alone hangs on a pinned robot. */
@@ -388,10 +432,12 @@ public class BlueFarAuto extends OpMode {
         panelsTelemetry.debug("Heading (deg)", Math.toDegrees(follower.getPose().getHeading()));
         panelsTelemetry.debug("Follower busy", follower.isBusy());
         panelsTelemetry.debug("Robot stuck", follower.isRobotStuck());
-        panelsTelemetry.debug("Aim distance (in)", aimDistance);
+        panelsTelemetry.debug("Fire distance (tuned)", aimFireDistance);
         panelsTelemetry.debug("Aim turret (deg)", aimTurretDeg);
         panelsTelemetry.debug("Aim velocity", aimVelocity);
         panelsTelemetry.debug("Aim hood", aimHood);
+        panelsTelemetry.debug("[ref] geometric dist", geoDistance);
+        panelsTelemetry.debug("[ref] geometric turret", geoTurretDeg);
         panelsTelemetry.debug("Turret actual (deg)", turret.getYawDegrees());
         panelsTelemetry.debug("Shooter ticks/sec", shooter.getCurrentVelocity());
         panelsTelemetry.debug("Shooter at speed", shooter.atTargetVelocity());
