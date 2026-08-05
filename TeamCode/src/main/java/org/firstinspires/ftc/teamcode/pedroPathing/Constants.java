@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+import com.pedropathing.control.PredictiveBrakingCoefficients;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
@@ -9,8 +10,6 @@ import com.pedropathing.paths.PathConstraints;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 /**
@@ -30,7 +29,30 @@ public class Constants {
             .mass(12.55)
             // Measured by the team, Zero Power Acceleration tuners.
             .forwardZeroPowerAcceleration(-23.69353949060179)
-            .lateralZeroPowerAcceleration(-59.22595640999532);
+            .lateralZeroPowerAcceleration(-59.22595640999532)
+            // Predictive braking, from the team's brake profile tuner.
+            //
+            // ARGUMENT ORDER IS (P, kLinearBraking, kQuadraticFriction) -- verified by
+            // decompiling PredictiveBrakingCoefficients in core-2.1.2. The constructor
+            // forwards to setCoefficients(P, kLinear, kQuadratic, maxPower), so passing
+            // the two tuned values in the order they are usually quoted (linear first,
+            // then quadratic) would silently land them in P and kLinearBraking. It would
+            // compile and brake wrongly. Keep P first.
+            //
+            // P = 0.15 is Pedro's own default -- the team supplied kLinear and kQuadratic
+            // only. Pedro's defaults for all three are (0.15, 0.1, 0.001), so both tuned
+            // values sit close to stock, which is a good sign the tuner behaved.
+            //
+            // maximumBrakingPower defaults to 0.2. Add .withMaximumBrakingPower(x) on the
+            // coefficients object to change it; it clamps to [0.0001, 1.0].
+            //
+            // This call also flips usePredictiveBraking to true on its own (it defaults
+            // to false) -- there is no separate enable flag to set.
+            .predictiveBrakingCoefficients(new PredictiveBrakingCoefficients(
+                    0.15,                   // P
+                    0.06871916614647798,    // kLinearBraking
+                    0.0018502244719814955   // kQuadraticFriction
+            ));
 
     public static MecanumConstants driveConstants = new MecanumConstants()
             .leftFrontMotorName("lf")
@@ -41,8 +63,12 @@ public class Constants {
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .xVelocity(62.91674708569144)
-            .yVelocity(79.02808674489418);
+            // Forward / Lateral Velocity Tuners. Strafe is 78.5% of forward (a 21.5%
+            // loss to mecanum roller slip), which is the expected 20-30% band -- an
+            // earlier pair had lateral FASTER than forward, which is physically
+            // impossible and meant the encoder directions were still wrong.
+            .xVelocity(80.85435906357654)
+            .yVelocity(63.44764192836492);
 
     public static PinpointConstants localizerConstants = new PinpointConstants()
             .forwardPodY(-5.3150)
