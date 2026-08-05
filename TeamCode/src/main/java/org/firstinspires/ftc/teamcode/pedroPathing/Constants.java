@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+import com.pedropathing.control.FilteredPIDFCoefficients;
+import com.pedropathing.control.PIDFCoefficients;
 import com.pedropathing.control.PredictiveBrakingCoefficients;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.FollowerConstants;
@@ -52,7 +54,55 @@ public class Constants {
                     0.15,                   // P
                     0.06871916614647798,    // kLinearBraking
                     0.0018502244719814955   // kQuadraticFriction
-            ));
+            ))
+
+            // Translational PIDF -- TUNED ON THIS ROBOT via the Translational Tuner.
+            // PIDFCoefficients order is (P, I, D, F).
+            .translationalPIDFCoefficients(new PIDFCoefficients(
+                    0.11,   // P
+                    0.0,    // I
+                    0.025,  // D
+                    0.0     // F
+            ))
+
+            // Heading PIDF -- NOT YET CONVERGED. Starting point, expect to iterate.
+            //
+            // Running 19859's gains (P 2.4935, D 0.2301) made this robot wobble badly on
+            // return. That is classic too-much-P: 32008 is 12.55 kg against 19859's 14.45,
+            // so less rotational inertia, so the same P overshoots and rings.
+            //
+            // P cut ~40% and D raised ~40% to damp the ring. ON THE NEXT RUN:
+            //   still wobbling      -> drop P another 20% (1.5 -> 1.2), leave D
+            //   slow / stops short  -> raise P back toward 1.9
+            //   sharp but jittery   -> lower D toward 0.25
+            // The twist-to-the-right seen during straight-line driving is THIS loop, not
+            // the drive PIDF -- retest drive only after heading holds angle.
+            .headingPIDFCoefficients(new PIDFCoefficients(
+                    1.5,    // P   (was 2.4935 from 19859)
+                    0.0,    // I
+                    0.32,   // D   (was 0.2301 from 19859)
+                    0.0     // F
+            ))
+
+            // Drive PIDF -- 19859's values, UNVERIFIED on this robot, kept at the team's
+            // instruction. FilteredPIDFCoefficients order is (P, I, D, T, F): T is a
+            // filter time constant in slot 4, F is slot 5. The field DECLARATION order in
+            // that class is P,I,D,F,T -- different from the constructor. Do not reorder
+            // these by reading the field list.
+            .drivePIDFCoefficients(new FilteredPIDFCoefficients(
+                    0.013,  // P
+                    0.0,    // I
+                    0.0005, // D
+                    0.6,    // T -- filter, not a gain
+                    0.0     // F
+            ))
+
+            // Centripetal scaling of 0 DISABLES centripetal correction entirely (Pedro's
+            // own default is 0.0005). With it off, the robot drifts wide on every curve --
+            // which matches the "occasional curves" drift reported during straight-line
+            // testing. Set as instructed, but this is the one value here that is off
+            // rather than tuned. Run the Centripetal Tuner once heading is settled.
+            .centripetalScaling(0);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
             .leftFrontMotorName("lf")
