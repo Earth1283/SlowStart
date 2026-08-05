@@ -34,6 +34,15 @@ public class RollerIntake implements Intake {
         roller.setPower(robotConstants.INTAKE_FIRE_POWER);
     }
 
+    /**
+     * V2's intakeFire(calculateIntakePower()) -- feed power scaled to the shot
+     * distance. The far shot wants ~0.70, not the flat 0.9 {@link #fire()} uses;
+     * over-feeding a volley jams the gates.
+     */
+    public void fire(double power) {
+        roller.setPower(power);
+    }
+
     /** V2's intakeInSlow -- gentler collection when artifacts are already stacking up. */
     public void intakeSlow() {
         roller.setPower(robotConstants.INTAKE_SLOW_POWER);
