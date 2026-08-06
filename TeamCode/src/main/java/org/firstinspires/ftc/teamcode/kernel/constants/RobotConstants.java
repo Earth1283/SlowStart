@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode.kernel.constants;
 
 import com.qualcomm.robotcore.util.Range;
 
-public class robotConstants {
+public class RobotConstants {
     public static double TURRET_FULL_RANGE_DEGREE = 360;
     public static double TURRET_FULL_RANGE_ENCODER = 1229;
 

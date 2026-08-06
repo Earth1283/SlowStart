@@ -7,8 +7,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.Range;
 
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants;
 
 /**
  * Two-axis {@link Turret} for team 32008: yaw motor "lt" plus pitch/hood servo
@@ -40,18 +40,18 @@ public class MultiAxisTurret implements Turret {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        yaw = hardwareMap.get(DcMotorEx.class, robotConfigs.TURRET);
+        yaw = hardwareMap.get(DcMotorEx.class, RobotConfigs.TURRET);
 
         yaw.setDirection(DcMotorSimple.Direction.REVERSE);
         yaw.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         yaw.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        yaw.setPositionPIDFCoefficients(robotConstants.TURRET_POSITION_PIDF_P);
+        yaw.setPositionPIDFCoefficients(RobotConstants.TURRET_POSITION_PIDF_P);
         yaw.setTargetPosition(0);
         yaw.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        yaw.setPower(robotConstants.TURRET_HOLD_POWER);
+        yaw.setPower(RobotConstants.TURRET_HOLD_POWER);
         yaw.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        pitch = hardwareMap.get(Servo.class, robotConfigs.HOOD);
+        pitch = hardwareMap.get(Servo.class, RobotConfigs.HOOD);
     }
 
     @Override
@@ -59,16 +59,16 @@ public class MultiAxisTurret implements Turret {
         yawTargetDeg = yawDegrees;
         yaw.setTargetPosition((int) Math.round(degreesToTicks(yawDegrees)));
         yaw.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        yaw.setPower(robotConstants.TURRET_HOLD_POWER);
+        yaw.setPower(RobotConstants.TURRET_HOLD_POWER);
 
         double clamped = Range.clip(pitchPercent, 0.0, 1.0);
-        pitch.setPosition(robotConstants.HOOD_LOWER_LIMIT
-                + clamped * (robotConstants.HOOD_UPPER_LIMIT - robotConstants.HOOD_LOWER_LIMIT));
+        pitch.setPosition(RobotConstants.HOOD_LOWER_LIMIT
+                + clamped * (RobotConstants.HOOD_UPPER_LIMIT - RobotConstants.HOOD_LOWER_LIMIT));
     }
 
     /** Aims both axes for a target at {@code distanceInches}, using V2's distance model. */
     public void aimForDistance(double yawDegrees, double distanceInches) {
-        setSetpoint(yawDegrees, robotConstants.hoodPercentForDistance(distanceInches));
+        setSetpoint(yawDegrees, RobotConstants.hoodPercentForDistance(distanceInches));
     }
 
     @Override
@@ -83,7 +83,7 @@ public class MultiAxisTurret implements Turret {
 
     @Override
     public boolean atSetpoint() {
-        return Math.abs(getYawDegrees() - yawTargetDeg) <= robotConstants.TURRET_YAW_TOLERANCE_DEG;
+        return Math.abs(getYawDegrees() - yawTargetDeg) <= RobotConstants.TURRET_YAW_TOLERANCE_DEG;
     }
 
     @Override
@@ -92,12 +92,12 @@ public class MultiAxisTurret implements Turret {
     }
 
     private double degreesToTicks(double degrees) {
-        return degrees * robotConstants.TURRET_FULL_RANGE_ENCODER
-                / robotConstants.TURRET_FULL_RANGE_DEGREE;
+        return degrees * RobotConstants.TURRET_FULL_RANGE_ENCODER
+                / RobotConstants.TURRET_FULL_RANGE_DEGREE;
     }
 
     private double ticksToDegrees(double ticks) {
-        return ticks / robotConstants.TURRET_FULL_RANGE_ENCODER
-                * robotConstants.TURRET_FULL_RANGE_DEGREE;
+        return ticks / RobotConstants.TURRET_FULL_RANGE_ENCODER
+                * RobotConstants.TURRET_FULL_RANGE_DEGREE;
     }
 }

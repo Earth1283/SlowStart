@@ -1,18 +1,18 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
-import static org.firstinspires.ftc.teamcode.kernel.constants.panelConstants.SHOOTER_KD;
-import static org.firstinspires.ftc.teamcode.kernel.constants.panelConstants.SHOOTER_KF;
-import static org.firstinspires.ftc.teamcode.kernel.constants.panelConstants.SHOOTER_KI;
-import static org.firstinspires.ftc.teamcode.kernel.constants.panelConstants.SHOOTER_KP;
-import static org.firstinspires.ftc.teamcode.kernel.constants.panelConstants.VELOCITY_TOR;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.HOOD;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.LEFT_SHOOTER;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.RIGHT_SHOOTER;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.TURRET;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.HOOD_LOWER_LIMIT;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.HOOD_UPPER_LIMIT;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.TURRET_FULL_RANGE_DEGREE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.TURRET_FULL_RANGE_ENCODER;
+import static org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants.SHOOTER_KD;
+import static org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants.SHOOTER_KF;
+import static org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants.SHOOTER_KI;
+import static org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants.SHOOTER_KP;
+import static org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants.VELOCITY_TOR;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.HOOD;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.LEFT_SHOOTER;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.RIGHT_SHOOTER;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.TURRET;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.HOOD_LOWER_LIMIT;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.HOOD_UPPER_LIMIT;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.TURRET_FULL_RANGE_DEGREE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.TURRET_FULL_RANGE_ENCODER;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.hardware.DcMotor;

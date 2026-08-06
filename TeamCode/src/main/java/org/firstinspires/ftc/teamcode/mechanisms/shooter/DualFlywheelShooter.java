@@ -5,9 +5,9 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants;
 
 /**
  * Two-motor flywheel {@link Shooter} for team 32008 ("ls" and "rs").
@@ -30,8 +30,8 @@ public class DualFlywheelShooter implements Shooter {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        left  = hardwareMap.get(DcMotorEx.class, robotConfigs.LEFT_SHOOTER);
-        right = hardwareMap.get(DcMotorEx.class, robotConfigs.RIGHT_SHOOTER);
+        left  = hardwareMap.get(DcMotorEx.class, RobotConfigs.LEFT_SHOOTER);
+        right = hardwareMap.get(DcMotorEx.class, RobotConfigs.RIGHT_SHOOTER);
 
         left.setDirection(DcMotorSimple.Direction.REVERSE);
 
@@ -43,10 +43,10 @@ public class DualFlywheelShooter implements Shooter {
     }
 
     private void applyPidf() {
-        left.setVelocityPIDFCoefficients(panelConstants.SHOOTER_KP, panelConstants.SHOOTER_KI,
-                panelConstants.SHOOTER_KD, panelConstants.SHOOTER_KF);
-        right.setVelocityPIDFCoefficients(panelConstants.SHOOTER_KP, panelConstants.SHOOTER_KI,
-                panelConstants.SHOOTER_KD, panelConstants.SHOOTER_KF);
+        left.setVelocityPIDFCoefficients(PanelConstants.SHOOTER_KP, PanelConstants.SHOOTER_KI,
+                PanelConstants.SHOOTER_KD, PanelConstants.SHOOTER_KF);
+        right.setVelocityPIDFCoefficients(PanelConstants.SHOOTER_KP, PanelConstants.SHOOTER_KI,
+                PanelConstants.SHOOTER_KD, PanelConstants.SHOOTER_KF);
     }
 
     @Override
@@ -59,7 +59,7 @@ public class DualFlywheelShooter implements Shooter {
 
     /** Commands the speed V2's model wants for a target at {@code distanceInches}. */
     public void setForDistance(double distanceInches) {
-        setTargetVelocity(robotConstants.velocityForDistance(distanceInches));
+        setTargetVelocity(RobotConstants.velocityForDistance(distanceInches));
     }
 
     /**
@@ -68,7 +68,7 @@ public class DualFlywheelShooter implements Shooter {
      * than holding full shooting speed across the whole match.
      */
     public void hold() {
-        setTargetVelocity(robotConstants.SHOOTER_HOLD_VELOCITY);
+        setTargetVelocity(RobotConstants.SHOOTER_HOLD_VELOCITY);
     }
 
     @Override
@@ -83,7 +83,7 @@ public class DualFlywheelShooter implements Shooter {
             return false;
         }
         return Math.abs(getCurrentVelocity() - targetTicksPerSecond)
-                <= panelConstants.VELOCITY_TOR;
+                <= PanelConstants.VELOCITY_TOR;
     }
 
     @Override

@@ -1,9 +1,9 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.HOOD;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.TURRET;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.TURRET_FULL_RANGE_DEGREE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.TURRET_FULL_RANGE_ENCODER;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.HOOD;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.TURRET;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.TURRET_FULL_RANGE_DEGREE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.TURRET_FULL_RANGE_ENCODER;
 
 import com.arcrobotics.ftclib.controller.PIDFController;
 import com.bylazar.configurables.annotations.Configurable;

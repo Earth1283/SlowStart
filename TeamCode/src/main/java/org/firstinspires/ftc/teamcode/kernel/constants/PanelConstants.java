@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.kernel.constants;
 import com.bylazar.configurables.annotations.Configurable;
 
 @Configurable
-public class panelConstants {
+public class PanelConstants {
     public static double SHOOTER_KP = 80;
     public static double SHOOTER_KI = 0;
     public static double SHOOTER_KD = 0;

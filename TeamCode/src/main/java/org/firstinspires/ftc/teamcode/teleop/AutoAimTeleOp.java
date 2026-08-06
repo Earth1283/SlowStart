@@ -8,7 +8,7 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.math.Vector;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
@@ -63,9 +63,9 @@ public abstract class AutoAimTeleOp extends OpMode {
 
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(new Pose(
-                robotConstants.autoEndX,
-                robotConstants.autoEndY,
-                robotConstants.autoEndH));
+                RobotConstants.autoEndX,
+                RobotConstants.autoEndY,
+                RobotConstants.autoEndH));
 
         intake.init(hardwareMap);
         // aass = true: AutoAim owns turret "lt" AND hood "panel". Without this
@@ -182,8 +182,8 @@ public abstract class AutoAimTeleOp extends OpMode {
         Pose p = follower.getPose();
         Vector v = follower.getVelocity();
         double headingDeg = Math.toDegrees(p.getHeading());
-        double shooterX = p.getX() + Math.cos(p.getHeading()) * robotConstants.SHOOTER_DRIVETRAIN_OFFSET;
-        double shooterY = p.getY() + Math.sin(p.getHeading()) * robotConstants.SHOOTER_DRIVETRAIN_OFFSET;
+        double shooterX = p.getX() + Math.cos(p.getHeading()) * RobotConstants.SHOOTER_DRIVETRAIN_OFFSET;
+        double shooterY = p.getY() + Math.sin(p.getHeading()) * RobotConstants.SHOOTER_DRIVETRAIN_OFFSET;
 
         boolean manual = !autoTurret || !aimOn;
         boolean braking = Math.hypot(gamepad1.left_stick_x, gamepad1.left_stick_y) < 0.15;

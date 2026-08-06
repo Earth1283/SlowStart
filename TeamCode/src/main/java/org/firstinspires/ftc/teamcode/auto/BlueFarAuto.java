@@ -12,8 +12,8 @@ import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-import org.firstinspires.ftc.teamcode.kernel.constants.autoConstants;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.AutoConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
@@ -42,14 +42,14 @@ public class BlueFarAuto extends OpMode {
     private static final Pose SHOOT_4_POSE  = new Pose(63.506, 15.738, Math.toRadians(120));
     private static final Pose PARK_POSE     = new Pose(56.781, 22.746, Math.toRadians(120));
 
-    public static double BLUE_GOAL_X = 144.0 - robotConstants.BLUE_TARGET_Y;
-    public static double BLUE_GOAL_Y = robotConstants.BLUE_TARGET_X;
+    public static double BLUE_GOAL_X = 144.0 - RobotConstants.BLUE_TARGET_Y;
+    public static double BLUE_GOAL_Y = RobotConstants.BLUE_TARGET_X;
 
     public static double YAW_OFFSET = 0.0;
 
     // Their timings, unchanged. AUTO_FAR_WAIT_FOR_SHOOT is 400 ms in the kernel;
     // the first volley gets +800 ms because the flywheel starts from cold.
-    public static long WAIT_FOR_SHOOT_MS = autoConstants.AUTO_FAR_WAIT_FOR_SHOOT;
+    public static long WAIT_FOR_SHOOT_MS = AutoConstants.AUTO_FAR_WAIT_FOR_SHOOT;
     public static long PRELOAD_EXTRA_MS = 800;
     public static long TOTAL_SHOOT_TIME_MS = 550;
 
@@ -209,17 +209,17 @@ public class BlueFarAuto extends OpMode {
 
     private void publishPoseForTeleOp() {
         Pose p = follower.getPose();
-        robotConstants.autoEndX = p.getX();
-        robotConstants.autoEndY = p.getY();
-        robotConstants.autoEndH = p.getHeading();
+        RobotConstants.autoEndX = p.getX();
+        RobotConstants.autoEndY = p.getY();
+        RobotConstants.autoEndH = p.getHeading();
     }
 
     private void updateAim() {
         Pose p = follower.getPose();
         Vector v = follower.getVelocity();
         double headingDeg = Math.toDegrees(p.getHeading());
-        double shooterX = p.getX() + Math.cos(p.getHeading()) * robotConstants.SHOOTER_DRIVETRAIN_OFFSET;
-        double shooterY = p.getY() + Math.sin(p.getHeading()) * robotConstants.SHOOTER_DRIVETRAIN_OFFSET;
+        double shooterX = p.getX() + Math.cos(p.getHeading()) * RobotConstants.SHOOTER_DRIVETRAIN_OFFSET;
+        double shooterY = p.getY() + Math.sin(p.getHeading()) * RobotConstants.SHOOTER_DRIVETRAIN_OFFSET;
 
         aim = autoAim.update(
                 shooterX, shooterY,

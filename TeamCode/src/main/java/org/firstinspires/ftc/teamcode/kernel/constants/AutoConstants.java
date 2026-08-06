@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode.kernel.constants;
 
 import com.pedropathing.geometry.Pose;
 
-public class autoConstants {
+public class AutoConstants {
     public static long TOTAL_SHOOT_TIME = 0;
 
     public static long AUTO_CLOSE_WAIT_FOR_SHOOT = 0;

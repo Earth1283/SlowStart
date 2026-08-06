@@ -3,9 +3,9 @@ package org.firstinspires.ftc.teamcode.mechanisms.intake;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-import org.firstinspires.ftc.teamcode.kernel.constants.panelConstants;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants;
 
 /**
  * Roller-type {@link Intake} for team 32008 ("intake").
@@ -20,18 +20,18 @@ public class RollerIntake implements Intake {
 
     @Override
     public void init(HardwareMap hardwareMap) {
-        roller = hardwareMap.get(DcMotor.class, robotConfigs.INTAKE);
+        roller = hardwareMap.get(DcMotor.class, RobotConfigs.INTAKE);
         roller.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
     }
 
     @Override
     public void intake() {
-        roller.setPower(panelConstants.INTAKE_POWER);
+        roller.setPower(PanelConstants.INTAKE_POWER);
     }
 
     @Override
     public void fire() {
-        roller.setPower(robotConstants.INTAKE_FIRE_POWER);
+        roller.setPower(RobotConstants.INTAKE_FIRE_POWER);
     }
 
     /**
@@ -45,7 +45,7 @@ public class RollerIntake implements Intake {
 
     /** V2's intakeInSlow -- gentler collection when artifacts are already stacking up. */
     public void intakeSlow() {
-        roller.setPower(robotConstants.INTAKE_SLOW_POWER);
+        roller.setPower(RobotConstants.INTAKE_SLOW_POWER);
     }
 
     @Override

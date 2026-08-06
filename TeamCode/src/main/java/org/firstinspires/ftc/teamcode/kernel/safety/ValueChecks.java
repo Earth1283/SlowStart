@@ -1,35 +1,12 @@
 package org.firstinspires.ftc.teamcode.kernel.safety;
 
 public class ValueChecks {
-    /*
-    We know Java 7 added the Object method.
-     */
-    public static boolean checkNullParameter(Object obj) {
-        return obj != null;
+    public static boolean isValueValid(double value) {
+        return !Double.isNaN(value) && !Double.isInfinite(value);
     }
 
     public static boolean checkInRange(double value, double min, double max) {
         return value >= min && value <= max;
-    }
-
-    public static boolean checkMotorPower(double power) {
-        return checkInRange(power, -1.0, 1.0);
-    }
-
-    public static double clampMotorPower(double power) {
-        return Math.max(-1.0, Math.min(1.0, power));
-    }
-
-    public static boolean checkFinite(double value) {
-        return !Double.isNaN(value) && !Double.isInfinite(value);
-    }
-
-    public static boolean checkPositive(double value) {
-        return value > 0;
-    }
-
-    public static boolean checkNonNegative(double value) {
-        return value >= 0;
     }
 
     public static boolean checkNotEmpty(String value) {
@@ -38,14 +15,6 @@ public class ValueChecks {
 
     public static boolean checkNotEmpty(Object[] array) {
         return array != null && array.length > 0;
-    }
-
-    public static boolean checkServoPosition(double position) {
-        return checkInRange(position, 0.0, 1.0);
-    }
-
-    public static double clampServoPosition(double position) {
-        return Math.max(0.0, Math.min(1.0, position));
     }
 
     public static int normalizeAngle(int angle) {

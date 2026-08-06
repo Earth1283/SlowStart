@@ -14,7 +14,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
-import org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs;
+import org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs;
 
 public class Constants {
 
@@ -41,10 +41,10 @@ public class Constants {
 
     public static MecanumConstants driveConstants = new MecanumConstants()
             .maxPower(1)
-            .leftFrontMotorName(robotConfigs.LEFT_FRONT)
-            .leftRearMotorName(robotConfigs.LEFT_BACK)
-            .rightFrontMotorName(robotConfigs.RIGHT_FRONT)
-            .rightRearMotorName(robotConfigs.RIGHT_BACK)
+            .leftFrontMotorName(RobotConfigs.LEFT_FRONT)
+            .leftRearMotorName(RobotConfigs.LEFT_BACK)
+            .rightFrontMotorName(RobotConfigs.RIGHT_FRONT)
+            .rightRearMotorName(RobotConfigs.RIGHT_BACK)
             .leftFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
@@ -58,7 +58,7 @@ public class Constants {
             .forwardPodY(-141.5)
             .strafePodX(0)
             .distanceUnit(DistanceUnit.MM)
-            .hardwareMapName(robotConfigs.PIN_POINT)
+            .hardwareMapName(RobotConfigs.PIN_POINT)
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)

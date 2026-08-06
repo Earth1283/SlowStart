@@ -1,12 +1,12 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.INTAKE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.LEFT_GATE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConfigs.RIGHT_GATE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.LEFT_GATE_CLOSE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.LEFT_GATE_OPEN;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.RIGHT_GATE_CLOSE;
-import static org.firstinspires.ftc.teamcode.kernel.constants.robotConstants.RIGHT_GATE_OPEN;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.INTAKE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.LEFT_GATE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConfigs.RIGHT_GATE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.LEFT_GATE_CLOSE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.LEFT_GATE_OPEN;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.RIGHT_GATE_CLOSE;
+import static org.firstinspires.ftc.teamcode.kernel.constants.RobotConstants.RIGHT_GATE_OPEN;
 
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;

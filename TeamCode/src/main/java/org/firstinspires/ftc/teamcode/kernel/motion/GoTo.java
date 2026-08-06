@@ -5,6 +5,10 @@ import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 
+import org.firstinspires.ftc.teamcode.kernel.exceptions.InvalidCoordinates;
+import org.firstinspires.ftc.teamcode.kernel.heuristics.BoundsCheck;
+import org.firstinspires.ftc.teamcode.kernel.safety.ValueChecks;
+
 /**
  * Thin wrapper around a Pedro {@link Follower} for one-shot point-to-point motion.
  * Builds a single-segment {@link BezierLine} path with linear heading interpolation
@@ -37,17 +41,13 @@ public class GoTo {
 
     /**
      * Raw-double overload of {@link #goTo(Pose, Pose)}; wraps the coordinates into
-     * {@link Pose} instances and delegates.
-     *
-     * @param currentX   starting X (inches, Pedro field frame)
-     * @param currentY   starting Y (inches, Pedro field frame)
-     * @param currentHdg starting heading (radians)
-     * @param targetX    destination X (inches, Pedro field frame)
-     * @param targetY    destination Y (inches, Pedro field frame)
-     * @param targetHdg  destination heading (radians)
+     * {@link Pose} instances and delegates. Here to maintain legacy compatibility
+     * Parameters are self-documenting.
      */
     public void goTo(double currentX, double currentY, double currentHdg,
-                     double targetX, double targetY, double targetHdg) {
-        goTo(new Pose(currentX, currentY, currentHdg), new Pose(targetX, targetY, targetHdg));
+                     double targetX, double targetY, double targetHdg) throws InvalidCoordinates {
+        BoundsCheck.isInBounds(targetX, targetY);
+        goTo(new Pose(currentX, currentY, ValueChecks.normalizeAngle(currentHdg)),
+                new Pose(targetX, targetY, ValueChecks.normalizeAngle(targetHdg)));
     }
 }
