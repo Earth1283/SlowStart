@@ -38,16 +38,20 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
  *   pickup3   segs 8 + 9   shoot3  -> pickup3   intake running
  *   toShoot4  seg 10       pickup3 -> shoot4    then SHOOT
  *
- * SHOT TRIGGER: the path is hand-drawn, so the four shoot poses are not identical
- * and the robot need not reach any of them exactly. A volley starts when the robot
- * comes within SHOOT_RADIUS of the ONE canonical shoot point and has slowed down,
- * OR when the leg ends -- whichever happens first. Getting near is enough.
+ * SHOT TRIGGER: the path is hand-drawn, so the shoot poses are not identical and
+ * the robot need not reach any of them exactly. A volley starts when the robot
+ * comes within SHOOT_RADIUS of the canonical point FOR THAT LEG and has slowed
+ * down, OR when the leg ends -- whichever happens first. Getting near is enough.
  *
- * WHICH GOAL: this path shoots the BLUE goal, at about 36 in. Verified by checking
- * the same solve against 32008's own close-side constants: their BLUE_CLOSE_SHOOT
- * (54, 90) at heading 180 comes out at 66.53 in against their tuned
- * CLOSE_FIRE_DISTANCE of 68.5, and -46.55 deg against their tuned
- * BLUE_CLOSE_FIRE_TURRET of -47. Both land within 2 in / 0.5 deg.
+ * TWO shoot points, 23 in apart: A for the preload only, B for shots 2, 3 and 4.
+ * One radius cannot cover both, so each leg is told which point it is aiming for.
+ *
+ * WHICH GOAL: the BLUE goal. Point A shoots from 40.0 in, point B from 64.1 in.
+ * Verified by running the same solve against 32008's own close-side constants:
+ * their BLUE_CLOSE_SHOOT (54, 90) at heading 180 comes out at 66.53 in against
+ * their tuned CLOSE_FIRE_DISTANCE of 68.5, and -46.55 deg against their tuned
+ * BLUE_CLOSE_FIRE_TURRET of -47. Both land within 2 in / 0.5 deg -- and point B
+ * at 64.1 in sits right in that same band, where their curves were fitted.
  *
  * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The gate and intake run on plain
  * timers, and the flywheel is commanded every loop with a shooterHold() fallback.
@@ -67,23 +71,34 @@ public class BlueCloseAuto extends OpMode {
     // hard at launch. The path's own number wins.
     private static final Pose START_POSE    = new Pose(24.883, 127.003, Math.toRadians(-37));
 
-    private static final Pose SHOOT_1_POSE  = new Pose(32.241, 108.327, Math.toRadians(130));
-    private static final Pose MID_1_POSE    = new Pose(41.209,  82.786, Math.toRadians(180));
-    private static final Pose PICKUP_1_POSE = new Pose(14.866,  82.820, Math.toRadians(180));
+    private static final Pose SHOOT_1_POSE  = new Pose(35.185, 106.014, Math.toRadians(130));
+    private static final Pose MID_1_POSE    = new Pose(55.248,  83.454, Math.toRadians(180));
+    private static final Pose PICKUP_1_POSE = new Pose(16.127,  82.820, Math.toRadians(180));
 
-    private static final Pose SHOOT_2_POSE  = new Pose(32.060, 108.390, Math.toRadians(130));
-    private static final Pose MID_2_POSE    = new Pose(43.208,  59.435, Math.toRadians(180));
-    private static final Pose PICKUP_2_POSE = new Pose(18.837,  58.973, Math.toRadians(180));
+    private static final Pose SHOOT_2_POSE  = new Pose(51.193,  89.257, Math.toRadians(130));
+    private static final Pose MID_2_POSE    = new Pose(57.692,  59.212, Math.toRadians(180));
+    private static final Pose PICKUP_2_POSE = new Pose(13.674,  58.973, Math.toRadians(180));
 
-    private static final Pose SHOOT_3_POSE  = new Pose(32.624, 107.879, Math.toRadians(130));
-    private static final Pose MID_3_POSE    = new Pose(43.217,  35.190, Math.toRadians(180));
-    private static final Pose PICKUP_3_POSE = new Pose(15.422,  35.251, Math.toRadians(180));
+    private static final Pose SHOOT_3_POSE  = new Pose(54.889,  86.035, Math.toRadians(130));
+    private static final Pose MID_3_POSE    = new Pose(50.125,  35.413, Math.toRadians(180));
+    private static final Pose PICKUP_3_POSE = new Pose(12.475,  35.016, Math.toRadians(180));
 
-    private static final Pose SHOOT_4_POSE  = new Pose(32.475, 108.413, Math.toRadians(130));
+    private static final Pose SHOOT_4_POSE  = new Pose(51.633,  89.267, Math.toRadians(130));
 
-    /** The one canonical shoot point. Proximity to THIS is what starts a volley. */
-    public static double SHOOT_POINT_X = 32.24145616641902;
-    public static double SHOOT_POINT_Y = 108.32689450222882;
+    /**
+     * TWO canonical shoot points, not one. Proximity to the RIGHT one is what
+     * starts a volley -- they sit 23 in apart, so a single radius cannot cover both.
+     *
+     *   A: the preload shot only, up near the goal   -- 40.0 in range, turret +2.3
+     *   B: shots 2, 3 and 4, further back            -- 64.1 in range, turret +3.0
+     *
+     * B lands close to 32008's own tuned CLOSE_FIRE_DISTANCE of 68.5, so those
+     * three shots sit right where their shooter curves were fitted.
+     */
+    public static double SHOOT_A_X = 35.184992570579496;
+    public static double SHOOT_A_Y = 106.01411589895989;
+    public static double SHOOT_B_X = 51.18716632536176;
+    public static double SHOOT_B_Y = 89.48999978149308;
 
     /** How near counts as "on the shoot point", inches. The path is hand-drawn. */
     public static double SHOOT_RADIUS = 6.0;
@@ -108,8 +123,20 @@ public class BlueCloseAuto extends OpMode {
     public static long TOTAL_SHOOT_TIME_MS = 550;
 
     // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
-    // 406 in of path plus four volleys budgets ~18 s, so this is slack, not a cap.
+    // 353 in of path plus four volleys budgets ~16 s, so this is slack, not a cap.
     public static double PATH_TIMEOUT = 6.0;
+    /**
+     * Hard cap on a collection leg -- a snagged intake gives up rather than eating
+     * the period.
+     *
+     * Raised 3.0 -> 4.0. At 3.0 the longest leg (pickup3, 88.5 in through a heading
+     * change) needed a 29.5 in/s average and was cutting itself short every run; 4.0
+     * asks for 22.1 in/s, which it comfortably makes. The whole auto still finishes
+     * around 18 s of the 30 s period either way, so this costs nothing.
+     *
+     * Set back to 3.0 here or in Panels if you want the tighter bail-out.
+     */
+    public static double INTAKE_TIMEOUT = 4.0;
     public static double SHOOT_TIMEOUT = 4.0;
     public static double ABORT_DEADLINE = 27.0;
 
@@ -156,7 +183,12 @@ public class BlueCloseAuto extends OpMode {
         // aass = true: AutoAim owns turret "lt" AND hood "panel". Without this
         // both classes grab the turret and fight over its run mode.
         shooter.init(hardwareMap, true);
+        // Zero the turret HERE and only here, with it parked forward, mirroring their
+        // Robot.autoInit() -> shooter.reset(). Put the flag straight back so TeleOp
+        // inherits this zero instead of re-zeroing to wherever auto left the turret.
+        AutoAimSubsystem.RESET_TURRET_ENCODER_ON_INIT = true;
         autoAim.init(hardwareMap);
+        AutoAimSubsystem.RESET_TURRET_ENCODER_ON_INIT = false;
 
         intake.gateClose();
 
@@ -269,6 +301,14 @@ public class BlueCloseAuto extends OpMode {
         RobotConstants.autoEndX = p.getX();
         RobotConstants.autoEndY = p.getY();
         RobotConstants.autoEndH = p.getHeading();
+
+        // ALLIANCE HANDOFF. TeleOp (AASSTEST) never picks a colour -- it aims at
+        // whatever these hold, so the auto is what decides. Their BLUE_FAR_18 sets
+        // the same pair in loop() and stop(). Without this TeleOp aims at whatever
+        // the last run left behind. Stated in the PINPOINT frame, which is the
+        // frame TeleOp works in, so no conversion.
+        RobotConstants.teleOpTargetX = RobotConstants.BLUE_TARGET_X;
+        RobotConstants.teleOpTargetY = RobotConstants.BLUE_TARGET_Y;
     }
 
     private void updateAim() {
@@ -309,17 +349,20 @@ public class BlueCloseAuto extends OpMode {
         }
     }
 
-    /** Hand-drawn path: near the shoot point and slowed down is good enough. */
-    private boolean nearShootPoint() {
+    /** Hand-drawn path: near the shoot point for THIS leg and slowed down is enough. */
+    private boolean nearShootPoint(double px, double py) {
         Pose p = follower.getPose();
-        distanceToShootPoint = Math.hypot(SHOOT_POINT_X - p.getX(), SHOOT_POINT_Y - p.getY());
+        distanceToShootPoint = Math.hypot(px - p.getX(), py - p.getY());
         return distanceToShootPoint <= SHOOT_RADIUS
                 && follower.getVelocity().getMagnitude() <= SHOOT_SPEED_MAX;
     }
 
-    /** True once the shooting leg is over: near enough, or the leg simply ended. */
-    private boolean readyToShoot() {
-        if (nearShootPoint()) {
+    /**
+     * True once the shooting leg is over: near enough to the point this leg aims
+     * for, or the leg simply ended. Pass point A for the preload, B for the rest.
+     */
+    private boolean readyToShoot(double px, double py) {
+        if (nearShootPoint(px, py)) {
             lastTransition = "at shoot point (" + String.format("%.1f", distanceToShootPoint) + " in)";
             return true;
         }
@@ -327,12 +370,17 @@ public class BlueCloseAuto extends OpMode {
     }
 
     private boolean pathDone() {
+        return pathDone(PATH_TIMEOUT);
+    }
+
+    /** Collection legs pass INTAKE_TIMEOUT; driving legs get the longer PATH_TIMEOUT. */
+    private boolean pathDone(double timeout) {
         if (follower.isRobotStuck()) {
             lastTransition = "path ended: ROBOT STUCK";
             return true;
         }
-        if (stateTimer.getElapsedTimeSeconds() > PATH_TIMEOUT) {
-            lastTransition = "path ended: TIMEOUT";
+        if (stateTimer.getElapsedTimeSeconds() > timeout) {
+            lastTransition = "path ended: TIMEOUT (" + timeout + "s)";
             return true;
         }
         if (!follower.isBusy() || follower.atParametricEnd()) {
@@ -399,7 +447,7 @@ public class BlueCloseAuto extends OpMode {
         switch (state) {
 
             case DRIVE_TO_SHOOT_1:
-                if (readyToShoot()) setState(State.SHOOT_1, "arrived: shoot 1");
+                if (readyToShoot(SHOOT_A_X, SHOOT_A_Y)) setState(State.SHOOT_1, "arrived: shoot 1");
                 break;
 
             case SHOOT_1:
@@ -411,7 +459,7 @@ public class BlueCloseAuto extends OpMode {
                 break;
 
             case DRIVE_PICKUP_1:
-                if (pathDone()) {
+                if (pathDone(INTAKE_TIMEOUT)) {
                     intake.intakeStop();
                     follower.followPath(toShoot2, true);
                     setState(State.DRIVE_TO_SHOOT_2, "pickup 1 done");
@@ -419,7 +467,7 @@ public class BlueCloseAuto extends OpMode {
                 break;
 
             case DRIVE_TO_SHOOT_2:
-                if (readyToShoot()) setState(State.SHOOT_2, "arrived: shoot 2");
+                if (readyToShoot(SHOOT_B_X, SHOOT_B_Y)) setState(State.SHOOT_2, "arrived: shoot 2");
                 break;
 
             case SHOOT_2:
@@ -431,7 +479,7 @@ public class BlueCloseAuto extends OpMode {
                 break;
 
             case DRIVE_PICKUP_2:
-                if (pathDone()) {
+                if (pathDone(INTAKE_TIMEOUT)) {
                     intake.intakeStop();
                     follower.followPath(toShoot3, true);
                     setState(State.DRIVE_TO_SHOOT_3, "pickup 2 done");
@@ -439,7 +487,7 @@ public class BlueCloseAuto extends OpMode {
                 break;
 
             case DRIVE_TO_SHOOT_3:
-                if (readyToShoot()) setState(State.SHOOT_3, "arrived: shoot 3");
+                if (readyToShoot(SHOOT_B_X, SHOOT_B_Y)) setState(State.SHOOT_3, "arrived: shoot 3");
                 break;
 
             case SHOOT_3:
@@ -451,7 +499,7 @@ public class BlueCloseAuto extends OpMode {
                 break;
 
             case DRIVE_PICKUP_3:
-                if (pathDone()) {
+                if (pathDone(INTAKE_TIMEOUT)) {
                     intake.intakeStop();
                     follower.followPath(toShoot4, true);
                     setState(State.DRIVE_TO_SHOOT_4, "pickup 3 done");
@@ -459,7 +507,7 @@ public class BlueCloseAuto extends OpMode {
                 break;
 
             case DRIVE_TO_SHOOT_4:
-                if (readyToShoot()) setState(State.SHOOT_4, "arrived: shoot 4");
+                if (readyToShoot(SHOOT_B_X, SHOOT_B_Y)) setState(State.SHOOT_4, "arrived: shoot 4");
                 break;
 
             case SHOOT_4:

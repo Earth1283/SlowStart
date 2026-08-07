@@ -55,6 +55,10 @@ public class BlueFarAuto extends OpMode {
 
     // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
     public static double PATH_TIMEOUT = 6.0;
+    // Hard cap on a collection leg. An intake run that has not finished in 3 s is
+    // not going to -- it is snagged, or the artifacts are not there. Give up and
+    // move on rather than spending the period on it.
+    public static double INTAKE_TIMEOUT = 3.0;
     public static double PARK_DEADLINE = 26.0;
 
     private enum State {
@@ -98,7 +102,12 @@ public class BlueFarAuto extends OpMode {
         // aass = true: AutoAim owns turret "lt" AND hood "panel". Without this
         // both classes grab the turret and fight over its run mode.
         shooter.init(hardwareMap, true);
+        // Zero the turret HERE and only here, with it parked forward, mirroring their
+        // Robot.autoInit() -> shooter.reset(). Put the flag straight back so TeleOp
+        // inherits this zero instead of re-zeroing to wherever auto left the turret.
+        AutoAimSubsystem.RESET_TURRET_ENCODER_ON_INIT = true;
         autoAim.init(hardwareMap);
+        AutoAimSubsystem.RESET_TURRET_ENCODER_ON_INIT = false;
 
         intake.gateClose();
 
@@ -212,6 +221,14 @@ public class BlueFarAuto extends OpMode {
         RobotConstants.autoEndX = p.getX();
         RobotConstants.autoEndY = p.getY();
         RobotConstants.autoEndH = p.getHeading();
+
+        // ALLIANCE HANDOFF. TeleOp (AASSTEST) never picks a colour -- it aims at
+        // whatever these hold, so the auto is what decides. Their BLUE_FAR_18 sets
+        // the same pair in loop() and stop(). Without this TeleOp aims at whatever
+        // the last run left behind. Stated in the PINPOINT frame, which is the
+        // frame TeleOp works in, so no conversion.
+        RobotConstants.teleOpTargetX = RobotConstants.BLUE_TARGET_X;
+        RobotConstants.teleOpTargetY = RobotConstants.BLUE_TARGET_Y;
     }
 
     private void updateAim() {
@@ -246,12 +263,17 @@ public class BlueFarAuto extends OpMode {
     }
 
     private boolean pathDone() {
+        return pathDone(PATH_TIMEOUT);
+    }
+
+    // Collection legs pass INTAKE_TIMEOUT; driving legs get the longer PATH_TIMEOUT.
+    private boolean pathDone(double timeout) {
         if (follower.isRobotStuck()) {
             lastTransition = "path ended: ROBOT STUCK";
             return true;
         }
-        if (stateTimer.getElapsedTimeSeconds() > PATH_TIMEOUT) {
-            lastTransition = "path ended: TIMEOUT";
+        if (stateTimer.getElapsedTimeSeconds() > timeout) {
+            lastTransition = "path ended: TIMEOUT (" + timeout + "s)";
             return true;
         }
         if (!follower.isBusy() || follower.atParametricEnd()) {
@@ -317,7 +339,7 @@ public class BlueFarAuto extends OpMode {
                 break;
 
             case DRIVE_PICKUP_1:
-                if (pathDone()) {
+                if (pathDone(INTAKE_TIMEOUT)) {
                     intake.intakeStop();
                     follower.followPath(toShoot2, true);
                     setState(State.DRIVE_TO_SHOOT_2, "pickup 1 done");
@@ -337,7 +359,7 @@ public class BlueFarAuto extends OpMode {
                 break;
 
             case DRIVE_PICKUP_2:
-                if (pathDone()) {
+                if (pathDone(INTAKE_TIMEOUT)) {
                     intake.intakeStop();
                     follower.followPath(toShoot3, true);
                     setState(State.DRIVE_TO_SHOOT_3, "pickup 2 done");
@@ -357,7 +379,7 @@ public class BlueFarAuto extends OpMode {
                 break;
 
             case DRIVE_PICKUP_3:
-                if (pathDone()) {
+                if (pathDone(INTAKE_TIMEOUT)) {
                     intake.intakeStop();
                     follower.followPath(toShoot4, true);
                     setState(State.DRIVE_TO_SHOOT_4, "pickup 3 done");

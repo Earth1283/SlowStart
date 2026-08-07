@@ -74,7 +74,13 @@ public class AutoAimSubsystem {
     public static double TURRET_MIN_SAFE_ANGLE = -175.0;
     public static double TURRET_MAX_SAFE_ANGLE = 175.0;
     public static double TURRET_CENTER_ANGLE = 0.0;
-    public static boolean RESET_TURRET_ENCODER_ON_INIT = true;
+    // Back to THEIR value. The turret encoder is zeroed exactly ONCE, by the
+    // autonomous at its INIT (with the turret parked forward), and TeleOp then
+    // INHERITS that zero. Leaving this true made TeleOp re-zero on its own INIT --
+    // i.e. call "0 degrees" whatever direction the auto happened to leave the
+    // turret pointing, which is why teleop aiming was off. The autos flip this
+    // true around their own autoAim.init() call and put it straight back.
+    public static boolean RESET_TURRET_ENCODER_ON_INIT = false;
 
     public static double BASE_FLIGHT_TIME = 0.4;
     public static double FLIGHT_TIME_PER_INCH = 0.00575;
