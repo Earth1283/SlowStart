@@ -4,6 +4,7 @@ import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.math.Vector;
@@ -28,35 +29,48 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
  *
  * PATH: the 10-segment Pedro Pathing export, split into 7 chains so the robot can
  * stop and shoot. FOUR volleys, after segments 1, 4, 7 and 10 -- the first is the
- * preload. Every heading interpolation is copied from the export exactly.
+ * preload. Segments 7 and 10 are BezierCurves; the other eight are lines. Every
+ * control point and heading interpolation is copied from the export exactly.
  *
- *   toShoot1  seg 1        start   -> shoot1    then SHOOT (preload)
- *   pickup1   segs 2 + 3   shoot1  -> pickup1   intake running
- *   toShoot2  seg 4        pickup1 -> shoot2    then SHOOT
- *   pickup2   segs 5 + 6   shoot2  -> pickup2   intake running
- *   toShoot3  seg 7        pickup2 -> shoot3    then SHOOT
- *   pickup3   segs 8 + 9   shoot3  -> pickup3   intake running
- *   toShoot4  seg 10       pickup3 -> shoot4    then SHOOT
+ *   toShoot1  seg 1        start   -> shoot1    23.4 in   then SHOOT (preload)
+ *   pickup1   segs 2 + 3   shoot1  -> pickup1   54.2 in
+ *   toShoot2  seg 4        pickup1 -> shoot2    29.6 in   then SHOOT
+ *   pickup2   segs 5 + 6   shoot2  -> pickup2   84.6 in
+ *   toShoot3  seg 7 CURVE  pickup2 -> shoot3    69.8 in   then SHOOT
+ *   pickup3   segs 8 + 9   shoot3  -> pickup3  108.4 in
+ *   toShoot4  seg 10 CURVE pickup3 -> shoot4    74.5 in   then SHOOT
+ *                                              ------- 444.5 in total
  *
- * SHOT TRIGGER: the path is hand-drawn, so the shoot poses are not identical and
- * the robot need not reach any of them exactly. A volley starts when the robot
- * comes within SHOOT_RADIUS of the canonical point FOR THAT LEG and has slowed
- * down, OR when the leg ends -- whichever happens first. Getting near is enough.
+ * SHOT TRIGGER: ARRIVAL, not proximity. The old version started a volley on
+ * getting within SHOOT_RADIUS of a canonical point; that is no longer even
+ * expressible, because the four shoot poses now sit 0.17 to 5.51 in apart -- being
+ * at shoot 1 puts the robot inside any workable radius of shoots 2, 3 and 4 as
+ * well. The leg ending IS the arrival signal now, which is also what "these are
+ * approximate firing points, fire the moment you get there" actually means.
  *
- * TWO shoot points, 23 in apart: A for the preload only, B for shots 2, 3 and 4.
- * One radius cannot cover both, so each leg is told which point it is aiming for.
+ * NO HESITATION ONCE THERE. The volley opens the gate and then fires as soon as
+ * the turret is LOCKED and the flywheel is AT SPEED -- both measured, not waited
+ * out on a timer. Aim and flywheel are commanded every loop for the whole approach,
+ * so in practice both are already true on arrival. The old fixed 400 ms pre-fire
+ * wait and the 800 ms extra on the preload are gone; only the gate's physical
+ * travel is still a timer, because nothing on the robot senses gate position.
  *
- * WHICH GOAL: the BLUE goal. Point A shoots from 40.0 in, point B from 64.1 in.
- * Verified by running the same solve against 32008's own close-side constants:
- * their BLUE_CLOSE_SHOOT (54, 90) at heading 180 comes out at 66.53 in against
- * their tuned CLOSE_FIRE_DISTANCE of 68.5, and -46.55 deg against their tuned
- * BLUE_CLOSE_FIRE_TURRET of -47. Both land within 2 in / 0.5 deg -- and point B
- * at 64.1 in sits right in that same band, where their curves were fitted.
+ * INTAKE RUNS THE WHOLE TIME, moving or stopped, from start() to the last shot.
+ * It is commanded every loop next to the flywheel; the fire step just overrides
+ * its power for the feed window.
  *
- * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The gate and intake run on plain
- * timers, and the flywheel is commanded every loop with a shooterHold() fallback.
- * An earlier version made the gate wait for aim lock, and one bad solve silently
- * killed the shooter, hood, gate and intake together.
+ * WHICH GOAL: the BLUE goal. Shot 1 from 40.0 in, shots 2-4 from 45.5-45.7 in.
+ * NOTE those are ~23 in closer than 32008's tuned CLOSE_FIRE_DISTANCE of 68.5,
+ * which is where their flywheel and hood polynomials were actually fitted -- the
+ * curves still evaluate, but further from their fit point than the old path was.
+ * If the close shots go long, that is the first thing to suspect.
+ *
+ * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The flywheel is commanded every loop
+ * with a shooterHold() fallback, and the intake never stops. Only the FIRE INSTANT
+ * consults the solve, and it has READY_TIMEOUT behind it so a solve that never
+ * locks costs one timeout instead of the whole auto. An earlier version made the
+ * gate itself wait on aim lock, and one bad solve silently killed the shooter,
+ * hood, gate and intake together.
  *
  * FIELD FRAME: the kernel states goals in the PINPOINT frame (pinX = pedroY,
  * pinY = 144 - pedroX). Converted to Pedro below. Blue is (8, 136);
@@ -72,38 +86,58 @@ public class BlueCloseAuto extends OpMode {
     private static final Pose START_POSE    = new Pose(24.883, 127.003, Math.toRadians(-37));
 
     private static final Pose SHOOT_1_POSE  = new Pose(35.185, 106.014, Math.toRadians(130));
-    private static final Pose MID_1_POSE    = new Pose(55.248,  83.454, Math.toRadians(180));
+    private static final Pose MID_1_POSE    = new Pose(45.211,  83.036, Math.toRadians(180));
     private static final Pose PICKUP_1_POSE = new Pose(16.127,  82.820, Math.toRadians(180));
 
-    private static final Pose SHOOT_2_POSE  = new Pose(51.193,  89.257, Math.toRadians(130));
-    private static final Pose MID_2_POSE    = new Pose(57.692,  59.212, Math.toRadians(180));
-    private static final Pose PICKUP_2_POSE = new Pose(13.674,  58.973, Math.toRadians(180));
+    private static final Pose SHOOT_2_POSE  = new Pose(38.786, 101.943, Math.toRadians(130));
+    private static final Pose MID_2_POSE    = new Pose(49.327,  58.933, Math.toRadians(180));
+    private static final Pose PICKUP_2_POSE = new Pose( 9.046,  58.416, Math.toRadians(180));
 
-    private static final Pose SHOOT_3_POSE  = new Pose(54.889,  86.035, Math.toRadians(130));
-    private static final Pose MID_3_POSE    = new Pose(50.125,  35.413, Math.toRadians(180));
-    private static final Pose PICKUP_3_POSE = new Pose(12.475,  35.016, Math.toRadians(180));
+    private static final Pose SHOOT_3_POSE  = new Pose(38.721, 101.785, Math.toRadians(130));
+    private static final Pose MID_3_POSE    = new Pose(47.616,  35.413, Math.toRadians(180));
+    private static final Pose PICKUP_3_POSE = new Pose( 6.202,  35.016, Math.toRadians(180));
 
-    private static final Pose SHOOT_4_POSE  = new Pose(51.633,  89.267, Math.toRadians(130));
+    private static final Pose SHOOT_4_POSE  = new Pose(38.501, 101.897, Math.toRadians(130));
+
+    // Control points for the two BezierCurves, straight from the export.
+    //
+    // SEG 7 hooks hard at its own end: over the last 2 in of travel the path tangent
+    // swings 108 deg -> 45 deg, and the geometric radius falls to 14 in at t=0.90 and
+    // 0.4 in at t=1.00. That is because C2 sits only 3.8 in from the endpoint while
+    // C1 is 55 in away. Left exactly as exported -- it is the drawn path -- but see
+    // the centripetal note on CENTRIPETAL_WARNING below, and pull C2 back toward the
+    // middle if the robot fishtails into shoot 3.
+    private static final Pose SEG7_C1 = new Pose(64.430, 55.334);
+    private static final Pose SEG7_C2 = new Pose(36.084, 99.105);
+    // Seg 10 is gentle by comparison -- 166 in minimum radius, nothing to watch.
+    private static final Pose SEG10_C1 = new Pose(24.327, 60.832);
 
     /**
-     * TWO canonical shoot points, not one. Proximity to the RIGHT one is what
-     * starts a volley -- they sit 23 in apart, so a single radius cannot cover both.
-     *
-     *   A: the preload shot only, up near the goal   -- 40.0 in range, turret +2.3
-     *   B: shots 2, 3 and 4, further back            -- 64.1 in range, turret +3.0
-     *
-     * B lands close to 32008's own tuned CLOSE_FIRE_DISTANCE of 68.5, so those
-     * three shots sit right where their shooter curves were fitted.
+     * Per-leg drive power, handed to followPath. ALREADY THE CEILING: the drivetrain
+     * is built with maxPower(1) and measured xVelocity 81.2 / yVelocity 64.1 in/s
+     * (pedroPathing/Constants.java), so there is no headroom above 1.0 to unlock --
+     * raising this number does nothing. Lower it if a leg needs to be gentler.
      */
-    public static double SHOOT_A_X = 35.184992570579496;
-    public static double SHOOT_A_Y = 106.01411589895989;
-    public static double SHOOT_B_X = 51.18716632536176;
-    public static double SHOOT_B_Y = 89.48999978149308;
+    public static double MAX_POWER = 1.0;
 
-    /** How near counts as "on the shoot point", inches. The path is hand-drawn. */
-    public static double SHOOT_RADIUS = 6.0;
-    /** ...and slow enough that the shot is not taken mid-sprint, inches/sec. */
-    public static double SHOOT_SPEED_MAX = 6.0;
+    /**
+     * Pedro's two deceleration knobs, applied per chain so nothing here leaks into
+     * BlueFarAuto or the teleop follower.
+     *
+     * BRAKING_STRENGTH multiplies the ZERO POWER ACCELERATION -- which is a MEASURED
+     * property of this robot (-27.35 forward, -56.36 lateral). Above 1.0 you are
+     * asserting it stops harder than it was measured to stop; the cost is overshoot
+     * and localization slip at the end of every leg, and every leg here ends at a
+     * shoot point or a pickup. BRAKING_START below 1.0 delays the start of braking.
+     *
+     * TODO(UNTUNED): both left at the team's current values, so this change alters
+     *   nothing until somebody measures. To go faster: raise BRAKING_STRENGTH in
+     *   0.1 steps from Panels, watching "Speed (in/s)" and the end-of-leg X/Y against
+     *   the target pose. Stop one step BEFORE the first overshoot. That is the only
+     *   remaining speed lever -- MAX_POWER is already pinned at the ceiling.
+     */
+    public static double BRAKING_STRENGTH = 1.0;
+    public static double BRAKING_START = 1.0;
 
     /** BLUE goal, PEDRO frame. Must read 8 / 136 -- 136 / 136 is the RED goal. */
     public static double BLUE_GOAL_X = 144.0 - RobotConstants.BLUE_TARGET_Y;
@@ -113,30 +147,39 @@ public class BlueCloseAuto extends OpMode {
     public static double YAW_OFFSET = 0.0;
 
     /**
-     * Gate-open to fire delay, ms. AutoConstants.AUTO_CLOSE_WAIT_FOR_SHOOT is 0,
-     * which would fire before the gate servos have physically travelled; their FAR
-     * value of 400 is used instead. Drop it once timed on the real robot.
+     * The ONLY remaining pre-fire wait, and it is not a guess at readiness -- it is
+     * how long the gate servos physically need to travel, which nothing on this robot
+     * senses. Kept at 32008's own FAR value of 400 because that is the number already
+     * in this file; time the servos and cut it, it is dead time on all four volleys.
+     *
+     * What used to sit next to it and is now GONE: a fixed 400 ms "hope the flywheel
+     * got there" wait and an 800 ms extra on the preload. Both are replaced by the
+     * measured lock+spool check in shotComplete().
      */
-    public static long WAIT_FOR_SHOOT_MS = 400;
-    /** First volley waits longer -- the flywheel starts from cold. */
-    public static long PRELOAD_EXTRA_MS = 800;
+    public static long GATE_TRAVEL_MS = 400;
+    /** Feed window once firing actually starts. */
     public static long TOTAL_SHOOT_TIME_MS = 550;
+    /**
+     * Fire anyway after this long waiting on lock+spool. Without it, one solve that
+     * never locks would hold a volley open until SHOOT_TIMEOUT and cost the next leg.
+     */
+    public static double READY_TIMEOUT = 1.2;
 
     // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
-    // 353 in of path plus four volleys budgets ~16 s, so this is slack, not a cap.
-    public static double PATH_TIMEOUT = 6.0;
+    // 444.5 in of path plus four volleys budgets ~15 s, so these are slack, not caps.
+    public static double PATH_TIMEOUT = 7.0;
     /**
      * Hard cap on a collection leg -- a snagged intake gives up rather than eating
      * the period.
      *
-     * Raised 3.0 -> 4.0. At 3.0 the longest leg (pickup3, 88.5 in through a heading
-     * change) needed a 29.5 in/s average and was cutting itself short every run; 4.0
-     * asks for 22.1 in/s, which it comfortably makes. The whole auto still finishes
-     * around 18 s of the 30 s period either way, so this costs nothing.
-     *
-     * Set back to 3.0 here or in Panels if you want the tighter bail-out.
+     * 4.0 -> 5.0, because the collection legs got substantially longer in this path:
+     * pickup1 54.2 in, pickup2 84.6 in, pickup3 108.4 in. At 4.0 the longest one
+     * needs a 27.1 in/s average through a heading change; at 5.0 it needs 21.7.
+     * This is a BAIL-OUT, not a pacer -- raising it does not slow the auto down, it
+     * only stops a leg being abandoned early. The 27 s ABORT_DEADLINE is the real
+     * backstop.
      */
-    public static double INTAKE_TIMEOUT = 4.0;
+    public static double INTAKE_TIMEOUT = 5.0;
     public static double SHOOT_TIMEOUT = 4.0;
     public static double ABORT_DEADLINE = 27.0;
 
@@ -169,6 +212,7 @@ public class BlueCloseAuto extends OpMode {
     private int shotPhase = 0;
     private int shotsFired = 0;
     private boolean shooterLive = false;
+    private boolean intakeLive = false;
     private String lastTransition = "none";
     private double distanceToShootPoint = 0.0;
 
@@ -212,68 +256,86 @@ public class BlueCloseAuto extends OpMode {
         panelsTelemetry.update(telemetry);
     }
 
-    /** Every heading interpolation is the export's, verbatim. */
+    /**
+     * Every control point and heading interpolation is the export's, verbatim.
+     * The braking knobs are applied per chain so they cannot leak into BlueFarAuto
+     * or the teleop follower, which share pedroPathing/Constants.
+     */
     private void buildPaths() {
-        toShoot1 = follower.pathBuilder()
+        toShoot1 = brake(follower.pathBuilder()
                 .addPath(new BezierLine(START_POSE, SHOOT_1_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(-37), Math.toRadians(130))
+                .setLinearHeadingInterpolation(Math.toRadians(-37), Math.toRadians(130)))
                 .build();
 
-        pickup1 = follower.pathBuilder()
+        pickup1 = brake(follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_1_POSE, MID_1_POSE))
                 .setLinearHeadingInterpolation(Math.toRadians(130), Math.toRadians(180))
                 .addPath(new BezierLine(MID_1_POSE, PICKUP_1_POSE))
-                .setTangentHeadingInterpolation()
+                .setTangentHeadingInterpolation())
                 .build();
 
-        toShoot2 = follower.pathBuilder()
+        toShoot2 = brake(follower.pathBuilder()
                 .addPath(new BezierLine(PICKUP_1_POSE, SHOOT_2_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(130))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(130)))
                 .build();
 
-        pickup2 = follower.pathBuilder()
+        pickup2 = brake(follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_2_POSE, MID_2_POSE))
                 .setLinearHeadingInterpolation(Math.toRadians(130), Math.toRadians(180))
                 .addPath(new BezierLine(MID_2_POSE, PICKUP_2_POSE))
-                .setTangentHeadingInterpolation()
+                .setTangentHeadingInterpolation())
                 .build();
 
-        toShoot3 = follower.pathBuilder()
-                .addPath(new BezierLine(PICKUP_2_POSE, SHOOT_3_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(130))
+        // Seg 7 -- CUBIC. Sweeps out to x = 43.7 before hooking back in. See SEG7_C1.
+        toShoot3 = brake(follower.pathBuilder()
+                .addPath(new BezierCurve(PICKUP_2_POSE, SEG7_C1, SEG7_C2, SHOOT_3_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(130)))
                 .build();
 
-        pickup3 = follower.pathBuilder()
+        pickup3 = brake(follower.pathBuilder()
                 .addPath(new BezierLine(SHOOT_3_POSE, MID_3_POSE))
                 .setLinearHeadingInterpolation(Math.toRadians(130), Math.toRadians(180))
                 .addPath(new BezierLine(MID_3_POSE, PICKUP_3_POSE))
-                .setTangentHeadingInterpolation()
+                .setTangentHeadingInterpolation())
                 .build();
 
-        toShoot4 = follower.pathBuilder()
-                .addPath(new BezierLine(PICKUP_3_POSE, SHOOT_4_POSE))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(130))
+        // Seg 10 -- QUADRATIC, and a gentle one: 166 in minimum radius.
+        toShoot4 = brake(follower.pathBuilder()
+                .addPath(new BezierCurve(PICKUP_3_POSE, SEG10_C1, SHOOT_4_POSE))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(130)))
                 .build();
+    }
+
+    /** Applies the two Panels-live braking knobs to a chain under construction. */
+    private com.pedropathing.paths.PathBuilder brake(com.pedropathing.paths.PathBuilder b) {
+        return b.setBrakingStrength(BRAKING_STRENGTH).setBrakingStart(BRAKING_START);
     }
 
     @Override
     public void start() {
         follower.activateAllPIDFs();
         shooterLive = true;
+        intakeLive = true;
         opmodeTimer.resetTimer();
-        follower.followPath(toShoot1, true);
+        follow(toShoot1);
         setState(State.DRIVE_TO_SHOOT_1, "start");
+    }
+
+    /** Every leg goes through here so MAX_POWER applies uniformly. */
+    private void follow(PathChain chain) {
+        follower.followPath(chain, MAX_POWER, true);
     }
 
     @Override
     public void loop() {
         follower.update();
 
-        // Aim + shooter run EVERY loop, unconditionally. Nothing below is allowed
-        // to depend on the state machine, and the state machine is not allowed to
-        // depend on the aim solve.
+        // Aim + shooter + intake run EVERY loop, unconditionally. Nothing below is
+        // allowed to depend on the state machine, and the state machine is not
+        // allowed to depend on the aim solve.
         updateAim();
         driveShooter();
+        driveIntake();
         publishPoseForTeleOp();
 
         if (opmodeTimer.getElapsedTimeSeconds() > ABORT_DEADLINE && state != State.DONE) {
@@ -349,24 +411,22 @@ public class BlueCloseAuto extends OpMode {
         }
     }
 
-    /** Hand-drawn path: near the shoot point for THIS leg and slowed down is enough. */
-    private boolean nearShootPoint(double px, double py) {
-        Pose p = follower.getPose();
-        distanceToShootPoint = Math.hypot(px - p.getX(), py - p.getY());
-        return distanceToShootPoint <= SHOOT_RADIUS
-                && follower.getVelocity().getMagnitude() <= SHOOT_SPEED_MAX;
+    /**
+     * Intake runs continuously, moving or stopped -- there is no "collection leg"
+     * any more, the roller is simply always on. Called BEFORE the state machine so
+     * the fire step can override the power for its feed window and have that stand
+     * for the loop.
+     */
+    private void driveIntake() {
+        if (intakeLive) {
+            intake.intakeIn();
+        }
     }
 
-    /**
-     * True once the shooting leg is over: near enough to the point this leg aims
-     * for, or the leg simply ended. Pass point A for the preload, B for the rest.
-     */
-    private boolean readyToShoot(double px, double py) {
-        if (nearShootPoint(px, py)) {
-            lastTransition = "at shoot point (" + String.format("%.1f", distanceToShootPoint) + " in)";
-            return true;
-        }
-        return pathDone();
+    /** Telemetry only now -- nothing gates on it. Distance to this leg's shoot pose. */
+    private void trackShootPoint(Pose target) {
+        Pose p = follower.getPose();
+        distanceToShootPoint = Math.hypot(target.getX() - p.getX(), target.getY() - p.getY());
     }
 
     private boolean pathDone() {
@@ -390,14 +450,22 @@ public class BlueCloseAuto extends OpMode {
         return false;
     }
 
+    /** Turret on target AND flywheel at the speed the solve asked for. */
+    private boolean readyToFire() {
+        return aim.hasTarget && aim.isAimLocked && shooter.shooterReady(aim.targetRpm);
+    }
+
     /**
-     * One volley, their order from BLUE_FAR_18 -- gate open, wait, fire, wait,
-     * gate close. Pure timers: the aim solve is never consulted here.
+     * One volley: gate open, fire the INSTANT the turret is locked and the flywheel
+     * is at speed, feed, close. The only timer standing between arrival and firing
+     * is GATE_TRAVEL_MS, which is physical servo travel, not a guess at readiness.
+     *
+     * READY_TIMEOUT fires anyway if the solve never locks, so a bad solve costs one
+     * volley's worth of hesitation instead of the rest of the auto.
      */
     private boolean shotComplete() {
         if (stateTimer.getElapsedTimeSeconds() > SHOOT_TIMEOUT) {
             intake.gateClose();
-            intake.intakeStop();
             shotPhase = 0;
             shotsFired++;
             lastTransition = "shot: ABANDONED on timeout";
@@ -411,16 +479,23 @@ public class BlueCloseAuto extends OpMode {
                 intake.intakeEngage();
                 shotTimer.resetTimer();
                 shotPhase = 1;
-                lastTransition = "shot: gate open, spinning up";
+                lastTransition = "shot: gate opening";
                 return false;
 
             case 1: {
-                long wait = WAIT_FOR_SHOOT_MS + (shotsFired == 0 ? PRELOAD_EXTRA_MS : 0);
-                if (shotTimer.getElapsedTime() >= wait) {
+                // Gate must have physically travelled first -- nothing senses it.
+                if (shotTimer.getElapsedTime() < GATE_TRAVEL_MS) {
+                    return false;
+                }
+                boolean ready = readyToFire();
+                boolean gaveUp = shotTimer.getElapsedTimeSeconds() > READY_TIMEOUT;
+                if (ready || gaveUp) {
                     intake.intakeFire(shooter.calculateIntakePower());
                     shotTimer.resetTimer();
                     shotPhase = 2;
-                    lastTransition = "shot: FIRING";
+                    lastTransition = ready
+                            ? "shot: FIRING (locked + at speed)"
+                            : "shot: FIRING (READY_TIMEOUT -- not locked)";
                 }
                 return false;
             }
@@ -429,7 +504,6 @@ public class BlueCloseAuto extends OpMode {
                 if (shotTimer.getElapsedTime() >= TOTAL_SHOOT_TIME_MS) {
                     intake.gateClose();
                     intake.intakeDisengage();
-                    intake.intakeStop();
                     shotPhase = 0;
                     shotsFired++;
                     lastTransition = "shot " + shotsFired + " done";
@@ -446,72 +520,74 @@ public class BlueCloseAuto extends OpMode {
     private void runStateMachine() {
         switch (state) {
 
+            // ARRIVAL is the trigger, every time. No radius, no slow-down gate --
+            // the four shoot poses are 0.17 to 5.51 in apart and no radius can tell
+            // them apart, so the leg ending is what "we are there" means now.
             case DRIVE_TO_SHOOT_1:
-                if (readyToShoot(SHOOT_A_X, SHOOT_A_Y)) setState(State.SHOOT_1, "arrived: shoot 1");
+                trackShootPoint(SHOOT_1_POSE);
+                if (pathDone()) setState(State.SHOOT_1, "arrived: shoot 1");
                 break;
 
             case SHOOT_1:
                 if (shotComplete()) {
-                    intake.intakeIn();
-                    follower.followPath(pickup1, true);
+                    follow(pickup1);
                     setState(State.DRIVE_PICKUP_1, "shot 1 done");
                 }
                 break;
 
             case DRIVE_PICKUP_1:
                 if (pathDone(INTAKE_TIMEOUT)) {
-                    intake.intakeStop();
-                    follower.followPath(toShoot2, true);
+                    follow(toShoot2);
                     setState(State.DRIVE_TO_SHOOT_2, "pickup 1 done");
                 }
                 break;
 
             case DRIVE_TO_SHOOT_2:
-                if (readyToShoot(SHOOT_B_X, SHOOT_B_Y)) setState(State.SHOOT_2, "arrived: shoot 2");
+                trackShootPoint(SHOOT_2_POSE);
+                if (pathDone()) setState(State.SHOOT_2, "arrived: shoot 2");
                 break;
 
             case SHOOT_2:
                 if (shotComplete()) {
-                    intake.intakeIn();
-                    follower.followPath(pickup2, true);
+                    follow(pickup2);
                     setState(State.DRIVE_PICKUP_2, "shot 2 done");
                 }
                 break;
 
             case DRIVE_PICKUP_2:
                 if (pathDone(INTAKE_TIMEOUT)) {
-                    intake.intakeStop();
-                    follower.followPath(toShoot3, true);
+                    follow(toShoot3);
                     setState(State.DRIVE_TO_SHOOT_3, "pickup 2 done");
                 }
                 break;
 
             case DRIVE_TO_SHOOT_3:
-                if (readyToShoot(SHOOT_B_X, SHOOT_B_Y)) setState(State.SHOOT_3, "arrived: shoot 3");
+                trackShootPoint(SHOOT_3_POSE);
+                if (pathDone()) setState(State.SHOOT_3, "arrived: shoot 3");
                 break;
 
             case SHOOT_3:
                 if (shotComplete()) {
-                    intake.intakeIn();
-                    follower.followPath(pickup3, true);
+                    follow(pickup3);
                     setState(State.DRIVE_PICKUP_3, "shot 3 done");
                 }
                 break;
 
             case DRIVE_PICKUP_3:
                 if (pathDone(INTAKE_TIMEOUT)) {
-                    intake.intakeStop();
-                    follower.followPath(toShoot4, true);
+                    follow(toShoot4);
                     setState(State.DRIVE_TO_SHOOT_4, "pickup 3 done");
                 }
                 break;
 
             case DRIVE_TO_SHOOT_4:
-                if (readyToShoot(SHOOT_B_X, SHOOT_B_Y)) setState(State.SHOOT_4, "arrived: shoot 4");
+                trackShootPoint(SHOOT_4_POSE);
+                if (pathDone()) setState(State.SHOOT_4, "arrived: shoot 4");
                 break;
 
             case SHOOT_4:
                 if (shotComplete()) {
+                    intakeLive = false;
                     intake.intakeStop();
                     shooterLive = false;
                     shooter.shooterStop();
@@ -531,6 +607,7 @@ public class BlueCloseAuto extends OpMode {
      */
     private void abort() {
         intake.gateClose();
+        intakeLive = false;
         intake.intakeStop();
         shooterLive = false;
         shooter.shooterStop();
@@ -559,6 +636,11 @@ public class BlueCloseAuto extends OpMode {
         panelsTelemetry.debug("Follower busy", follower.isBusy());
         panelsTelemetry.debug("Robot stuck", follower.isRobotStuck());
 
+        panelsTelemetry.debug("Ready to FIRE", readyToFire());
+        panelsTelemetry.debug("Flywheel at speed", shooter.shooterReady(aim.targetRpm));
+        panelsTelemetry.debug("Intake live", intakeLive);
+        panelsTelemetry.debug("Max power", MAX_POWER);
+        panelsTelemetry.debug("Braking strength", BRAKING_STRENGTH);
         panelsTelemetry.debug("Aim has target", aim.hasTarget);
         panelsTelemetry.debug("Aim LOCKED", aim.isAimLocked);
         panelsTelemetry.debug("Aim range (in)", aim.targetDist);

@@ -70,14 +70,15 @@ import org.firstinspires.ftc.teamcode.subsystems.Robot;
  * DRIVE is headless -- AutoAim still reads the true heading off the follower for the
  * turret solve, and the right stick still rotates the robot as before.
  *
- * VERIFY FIELD_FORWARD_DEG BEFORE YOU TRUST IT. Its default of 90 encodes a guess
- * about which wall the drivers stand behind, and no amount of reading the code can
- * settle that. On the field: run the auto, stand where you drive from, push the left
- * stick straight forward.
+ * FIELD_FORWARD_DEG = 180 is the drivers' own spec: from (70, 70) stick forward
+ * goes to (30, 70) and stick left goes to (70, 30). Confirmed on blue only.
+ *
+ * If it ever comes out wrong -- other alliance, field flipped, robot re-mounted --
+ * run the auto, stand where you drive from, push the left stick straight forward:
  *   robot drives away from you           -> correct, leave it
- *   robot drives toward you              -> -90
- *   robot drives to your right           -> 0
- *   robot drives to your left            -> 180
+ *   robot drives toward you              -> add 180
+ *   robot drives to your right           -> add 90
+ *   robot drives to your left            -> subtract 90
  *   forward is right but left/right are  -> flip INVERT_STRAFE
  *     swapped
  * All of it is Panels, live, no rebuild. ROBOT_CENTRIC = true reverts to the old
@@ -145,18 +146,22 @@ public class AASSTEST extends LinearOpMode {
      * when gamepad1's left stick is pushed straight forward. Stick left goes 90 deg
      * counter-clockwise of it, and so on.
      *
-     * 90 assumes the drivers stand behind the Y = 0 wall looking toward +Y, i.e.
-     * toward the goal wall (both goals sit at Y = 136, blue at X = 8 and red at
-     * X = 136). Under that assumption both alliances share this one value, because
-     * the field mirrors about X = 72 -- the alliance stations are side by side on
-     * the same wall, so "away from the driver" is the same field direction for both.
+     * 180 is the behaviour the drivers asked for, stated as field coordinates:
      *
-     * THIS IS AN ASSUMPTION ABOUT WHERE PEOPLE PHYSICALLY STAND. It cannot be
-     * derived from the code, so verify it on the field, see the header. If forward
-     * drives back toward the drivers, this is -90. If it drives sideways, it is 0
-     * or 180. Panels field, no rebuild.
+     *   from (70, 70), stick forward -> (30, 70)    X falls, Y held  =  field -X
+     *   from (70, 70), stick left    -> (70, 30)    Y falls, X held  =  field -Y
+     *
+     * Those two are consistent with each other -- -Y is exactly 90 deg counter-
+     * clockwise of -X, which is where Pedro puts "left" -- so one rotation covers
+     * both and INVERT_STRAFE stays off. Drivers are therefore behind the X = 144
+     * wall looking toward -X.
+     *
+     * SET FROM THE BLUE SIDE. Only Blue autos exist, so only blue is confirmed. If
+     * the red alliance station sits on the opposite wall, red wants 0 here; if it is
+     * beside blue on the same wall, 180 covers both. Drive it once on red and see.
+     * Same Panels field either way, no rebuild.
      */
-    public static double FIELD_FORWARD_DEG = 90.0;
+    public static double FIELD_FORWARD_DEG = 180.0;
 
     // Live axis flips, so a wrong sign can be fixed from Panels instead of a rebuild.
     public static boolean INVERT_FORWARD = false;
