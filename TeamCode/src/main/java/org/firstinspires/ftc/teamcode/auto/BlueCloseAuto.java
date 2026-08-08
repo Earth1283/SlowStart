@@ -19,70 +19,11 @@ import org.firstinspires.ftc.teamcode.subsystems.AutoAimSubsystem;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 
-/**
- * Team 32008 -- DECODE 2025-26 -- BLUE CLOSE autonomous.
- *
- * 32008's own subsystems, copied verbatim into teamcode/subsystems:
- * {@link AutoAimSubsystem} (turret + hood + shot solve), {@link Shooter}
- * (flywheels), {@link Intake} (roller + both gates). Only the PATH is this
- * team's own.
- *
- * PATH: the 10-segment Pedro Pathing export, split into 7 chains so the robot can
- * stop and shoot. FOUR volleys, after segments 1, 4, 7 and 10 -- the first is the
- * preload. Segments 7 and 10 are BezierCurves; the other eight are lines. Every
- * control point and heading interpolation is copied from the export exactly.
- *
- *   toShoot1  seg 1        start   -> shoot1    23.4 in   then SHOOT (preload)
- *   pickup1   segs 2 + 3   shoot1  -> pickup1   54.2 in
- *   toShoot2  seg 4        pickup1 -> shoot2    29.6 in   then SHOOT
- *   pickup2   segs 5 + 6   shoot2  -> pickup2   84.6 in
- *   toShoot3  seg 7 CURVE  pickup2 -> shoot3    69.8 in   then SHOOT
- *   pickup3   segs 8 + 9   shoot3  -> pickup3  108.4 in
- *   toShoot4  seg 10 CURVE pickup3 -> shoot4    74.5 in   then SHOOT
- *                                              ------- 444.5 in total
- *
- * SHOT TRIGGER: ARRIVAL, not proximity. The old version started a volley on
- * getting within SHOOT_RADIUS of a canonical point; that is no longer even
- * expressible, because the four shoot poses now sit 0.17 to 5.51 in apart -- being
- * at shoot 1 puts the robot inside any workable radius of shoots 2, 3 and 4 as
- * well. The leg ending IS the arrival signal now, which is also what "these are
- * approximate firing points, fire the moment you get there" actually means.
- *
- * NO HESITATION ONCE THERE. The volley opens the gate and then fires as soon as
- * the turret is LOCKED and the flywheel is AT SPEED -- both measured, not waited
- * out on a timer. Aim and flywheel are commanded every loop for the whole approach,
- * so in practice both are already true on arrival. The old fixed 400 ms pre-fire
- * wait and the 800 ms extra on the preload are gone; only the gate's physical
- * travel is still a timer, because nothing on the robot senses gate position.
- *
- * INTAKE RUNS THE WHOLE TIME, moving or stopped, from start() to the last shot.
- * It is commanded every loop next to the flywheel; the fire step just overrides
- * its power for the feed window.
- *
- * WHICH GOAL: the BLUE goal. Shot 1 from 40.0 in, shots 2-4 from 45.5-45.7 in.
- * NOTE those are ~23 in closer than 32008's tuned CLOSE_FIRE_DISTANCE of 68.5,
- * which is where their flywheel and hood polynomials were actually fitted -- the
- * curves still evaluate, but further from their fit point than the old path was.
- * If the close shots go long, that is the first thing to suspect.
- *
- * MECHANISMS ARE NOT GATED ON THE AIM SOLVE. The flywheel is commanded every loop
- * with a shooterHold() fallback, and the intake never stops. Only the FIRE INSTANT
- * consults the solve, and it has READY_TIMEOUT behind it so a solve that never
- * locks costs one timeout instead of the whole auto. An earlier version made the
- * gate itself wait on aim lock, and one bad solve silently killed the shooter,
- * hood, gate and intake together.
- *
- * FIELD FRAME: the kernel states goals in the PINPOINT frame (pinX = pedroY,
- * pinY = 144 - pedroX). Converted to Pedro below. Blue is (8, 136);
- * (136, 136) is the RED goal.
- */
+// STOP WITH THE STUPID JAVADOCS
+
 @Autonomous(name = "32008 Blue Close Auto", group = "32008")
 @Configurable
 public class BlueCloseAuto extends OpMode {
-
-    // Segment 1's own start point. The export's setStartingPose said (72, 8),
-    // which is nowhere near where its own first path begins -- Pedro would snap
-    // hard at launch. The path's own number wins.
     private static final Pose START_POSE    = new Pose(24.883, 127.003, Math.toRadians(-37));
 
     private static final Pose SHOOT_1_POSE  = new Pose(35.185, 106.014, Math.toRadians(130));
@@ -98,44 +39,12 @@ public class BlueCloseAuto extends OpMode {
     private static final Pose PICKUP_3_POSE = new Pose( 6.202,  35.016, Math.toRadians(180));
 
     private static final Pose SHOOT_4_POSE  = new Pose(38.501, 101.897, Math.toRadians(130));
-
-    // Control points for the two BezierCurves, straight from the export.
-    //
-    // SEG 7 hooks hard at its own end: over the last 2 in of travel the path tangent
-    // swings 108 deg -> 45 deg, and the geometric radius falls to 14 in at t=0.90 and
-    // 0.4 in at t=1.00. That is because C2 sits only 3.8 in from the endpoint while
-    // C1 is 55 in away. Left exactly as exported -- it is the drawn path -- but see
-    // the centripetal note on CENTRIPETAL_WARNING below, and pull C2 back toward the
-    // middle if the robot fishtails into shoot 3.
     private static final Pose SEG7_C1 = new Pose(64.430, 55.334);
     private static final Pose SEG7_C2 = new Pose(36.084, 99.105);
-    // Seg 10 is gentle by comparison -- 166 in minimum radius, nothing to watch.
     private static final Pose SEG10_C1 = new Pose(24.327, 60.832);
 
-    /**
-     * Per-leg drive power, handed to followPath. ALREADY THE CEILING: the drivetrain
-     * is built with maxPower(1) and measured xVelocity 81.2 / yVelocity 64.1 in/s
-     * (pedroPathing/Constants.java), so there is no headroom above 1.0 to unlock --
-     * raising this number does nothing. Lower it if a leg needs to be gentler.
-     */
     public static double MAX_POWER = 1.0;
 
-    /**
-     * Pedro's two deceleration knobs, applied per chain so nothing here leaks into
-     * BlueFarAuto or the teleop follower.
-     *
-     * BRAKING_STRENGTH multiplies the ZERO POWER ACCELERATION -- which is a MEASURED
-     * property of this robot (-27.35 forward, -56.36 lateral). Above 1.0 you are
-     * asserting it stops harder than it was measured to stop; the cost is overshoot
-     * and localization slip at the end of every leg, and every leg here ends at a
-     * shoot point or a pickup. BRAKING_START below 1.0 delays the start of braking.
-     *
-     * TODO(UNTUNED): both left at the team's current values, so this change alters
-     *   nothing until somebody measures. To go faster: raise BRAKING_STRENGTH in
-     *   0.1 steps from Panels, watching "Speed (in/s)" and the end-of-leg X/Y against
-     *   the target pose. Stop one step BEFORE the first overshoot. That is the only
-     *   remaining speed lever -- MAX_POWER is already pinned at the ceiling.
-     */
     public static double BRAKING_STRENGTH = 1.0;
     public static double BRAKING_START = 1.0;
 
@@ -146,39 +55,13 @@ public class BlueCloseAuto extends OpMode {
     /** Turret mounting trim, degrees, passed straight to AutoAim's yawOffset. */
     public static double YAW_OFFSET = 0.0;
 
-    /**
-     * The ONLY remaining pre-fire wait, and it is not a guess at readiness -- it is
-     * how long the gate servos physically need to travel, which nothing on this robot
-     * senses. Kept at 32008's own FAR value of 400 because that is the number already
-     * in this file; time the servos and cut it, it is dead time on all four volleys.
-     *
-     * What used to sit next to it and is now GONE: a fixed 400 ms "hope the flywheel
-     * got there" wait and an 800 ms extra on the preload. Both are replaced by the
-     * measured lock+spool check in shotComplete().
-     */
     public static long GATE_TRAVEL_MS = 400;
-    /** Feed window once firing actually starts. */
     public static long TOTAL_SHOOT_TIME_MS = 550;
-    /**
-     * Fire anyway after this long waiting on lock+spool. Without it, one solve that
-     * never locks would hold a volley open until SHOOT_TIMEOUT and cost the next leg.
-     */
     public static double READY_TIMEOUT = 1.2;
 
     // Safety rails. Not from 32008 -- they keep a bad run from eating the period.
     // 444.5 in of path plus four volleys budgets ~15 s, so these are slack, not caps.
     public static double PATH_TIMEOUT = 7.0;
-    /**
-     * Hard cap on a collection leg -- a snagged intake gives up rather than eating
-     * the period.
-     *
-     * 4.0 -> 5.0, because the collection legs got substantially longer in this path:
-     * pickup1 54.2 in, pickup2 84.6 in, pickup3 108.4 in. At 4.0 the longest one
-     * needs a 27.1 in/s average through a heading change; at 5.0 it needs 21.7.
-     * This is a BAIL-OUT, not a pacer -- raising it does not slow the auto down, it
-     * only stops a leg being abandoned early. The 27 s ABORT_DEADLINE is the real
-     * backstop.
-     */
     public static double INTAKE_TIMEOUT = 5.0;
     public static double SHOOT_TIMEOUT = 4.0;
     public static double ABORT_DEADLINE = 27.0;
@@ -227,9 +110,6 @@ public class BlueCloseAuto extends OpMode {
         // aass = true: AutoAim owns turret "lt" AND hood "panel". Without this
         // both classes grab the turret and fight over its run mode.
         shooter.init(hardwareMap, true);
-        // Zero the turret HERE and only here, with it parked forward, mirroring their
-        // Robot.autoInit() -> shooter.reset(). Put the flag straight back so TeleOp
-        // inherits this zero instead of re-zeroing to wherever auto left the turret.
         AutoAimSubsystem.RESET_TURRET_ENCODER_ON_INIT = true;
         autoAim.init(hardwareMap);
         AutoAimSubsystem.RESET_TURRET_ENCODER_ON_INIT = false;
@@ -329,10 +209,6 @@ public class BlueCloseAuto extends OpMode {
     @Override
     public void loop() {
         follower.update();
-
-        // Aim + shooter + intake run EVERY loop, unconditionally. Nothing below is
-        // allowed to depend on the state machine, and the state machine is not
-        // allowed to depend on the aim solve.
         updateAim();
         driveShooter();
         driveIntake();
@@ -362,13 +238,7 @@ public class BlueCloseAuto extends OpMode {
         Pose p = follower.getPose();
         RobotConstants.autoEndX = p.getX();
         RobotConstants.autoEndY = p.getY();
-        RobotConstants.autoEndH = p.getHeading();
-
-        // ALLIANCE HANDOFF. TeleOp (AASSTEST) never picks a colour -- it aims at
-        // whatever these hold, so the auto is what decides. Their BLUE_FAR_18 sets
-        // the same pair in loop() and stop(). Without this TeleOp aims at whatever
-        // the last run left behind. Stated in the PINPOINT frame, which is the
-        // frame TeleOp works in, so no conversion.
+        RobotConstants.autoEndH = p.getHeading
         RobotConstants.teleOpTargetX = RobotConstants.BLUE_TARGET_X;
         RobotConstants.teleOpTargetY = RobotConstants.BLUE_TARGET_Y;
     }
@@ -377,8 +247,6 @@ public class BlueCloseAuto extends OpMode {
         Pose p = follower.getPose();
         Vector v = follower.getVelocity();
         double headingDeg = Math.toDegrees(p.getHeading());
-        // The shooter does not sit over the centre of rotation; their teleop applies
-        // this at the call site (V2 tests/AASSTEST.java:83).
         double shooterX = p.getX() + Math.cos(p.getHeading()) * RobotConstants.SHOOTER_DRIVETRAIN_OFFSET;
         double shooterY = p.getY() + Math.sin(p.getHeading()) * RobotConstants.SHOOTER_DRIVETRAIN_OFFSET;
 
@@ -395,11 +263,7 @@ public class BlueCloseAuto extends OpMode {
                 YAW_OFFSET);
     }
 
-    /**
-     * Commands the flywheel every loop. Falls back to their shooterHold() rather
-     * than to zero when the solve has no target, so a momentary bad solve cannot
-     * spin the shooter down mid-volley.
-     */
+    
     private void driveShooter() {
         if (!shooterLive) {
             return;
@@ -450,7 +314,6 @@ public class BlueCloseAuto extends OpMode {
         return false;
     }
 
-    /** Turret on target AND flywheel at the speed the solve asked for. */
     private boolean readyToFire() {
         return aim.hasTarget && aim.isAimLocked && shooter.shooterReady(aim.targetRpm);
     }
