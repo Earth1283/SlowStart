@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.teleop.v2;
 
-import static org.firstinspires.ftc.teamcode.kernel.constants.AutoConstants.BLUE_CLOSE_START;
 import static org.firstinspires.ftc.teamcode.kernel.constants.AutoConstants.RED_CLOSE_START;
 import static org.firstinspires.ftc.teamcode.kernel.constants.AutoConstants.TOTAL_SHOOT_TIME;
 import static org.firstinspires.ftc.teamcode.kernel.constants.PanelConstants.INTAKE_POWER;
@@ -89,7 +88,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Robot;
  *   gp1 right trigger  intake in                gp1 right bumper  FIRE (or gate intake)
  *   gp1 left trigger   intake out               gp2 left bumper   toggle auto turret
  *   dpad up/down  distance trim +/-2            gp2 circle        toggle auto shooter
- *   dpad left/right  turret trim +/-1           gp1 START         re-seed pose
+ *   dpad left/right  turret trim +/-1           gp1 OPTIONS/START re-seed pose
  */
 @TeleOp(name = "V2 AASSTEST (real teleop)", group = "32008 V2")
 @Configurable
@@ -113,6 +112,7 @@ public class AASSTEST extends LinearOpMode {
     // the first assignment is guaranteed.
     AutoAimSubsystem.TurretCommand command = new AutoAimSubsystem.TurretCommand();
     boolean lastFar = false;
+    private String lastReseed = "none";
 
     /** Goal in the PEDRO frame, converted from the kernel's PINPOINT-frame pair. */
     private double goalX, goalY;
@@ -168,6 +168,25 @@ public class AASSTEST extends LinearOpMode {
     public static boolean INVERT_STRAFE = false;
     public static boolean INVERT_TURN = false;
 
+    /**
+     * Where OPTIONS/START puts the robot on BLUE, PEDRO frame. Physically place the
+     * robot on this spot first, then press -- this does not find the robot, it
+     * asserts where it is, and the follower and AutoAim both believe it immediately.
+     *
+     * X and Y are the drivers' own numbers. It lands 3.5 in from BlueCloseAuto's
+     * START_POSE (24.883, 127.003), i.e. it is the auto starting tile.
+     *
+     * HEADING IS AN ASSUMPTION -- the drivers gave X and Y only. -37 deg is
+     * BlueCloseAuto's START_POSE heading, which is the heading the robot has when it
+     * is sitting on that tile at the start of a match. If a re-seed leaves AutoAim
+     * pointing wrong while X/Y read correct, this is the number to fix, and it is one
+     * Panels field. RED is untouched and still goes to RED_CLOSE_START -- only blue
+     * was specified.
+     */
+    public static double RESEED_BLUE_X = 22.99034175334324;
+    public static double RESEED_BLUE_Y = 124.05943536404162;
+    public static double RESEED_BLUE_H_DEG = -37.0;
+
     @Override
     public void runOpMode() throws InterruptedException {
         // Pedro's follower owns the drive motors AND the Pinpoint, so Drivetrain
@@ -222,8 +241,17 @@ public class AASSTEST extends LinearOpMode {
             double omegaDeg = Math.toDegrees(follower.getAngularVelocity());
             boolean isBraking = Math.hypot(gamepad1.left_stick_x, gamepad1.left_stick_y) < 0.15;
 
-            if (gamepad1.start) {
-                follower.setPose(targetY > 50 ? BLUE_CLOSE_START.copy() : RED_CLOSE_START.copy());
+            // OPTIONS / START -- same physical button. The SDK's Gamepad assigns
+            // options = start (PS-layout alias), so one edge trigger covers both.
+            //
+            // EDGE, not level. Their version tested gamepad1.start directly, which
+            // re-seeded the localizer every single loop the button was held down --
+            // each call stomping the pose the follower had just integrated.
+            if (gamepad1.startWasPressed()) {
+                follower.setPose(targetY > 50
+                        ? new Pose(RESEED_BLUE_X, RESEED_BLUE_Y, Math.toRadians(RESEED_BLUE_H_DEG))
+                        : RED_CLOSE_START.copy());
+                lastReseed = "blue " + (targetY > 50);
             }
 
             if (shooterOn) {
@@ -383,6 +411,7 @@ public class AASSTEST extends LinearOpMode {
         joinedTele.addData("h", Math.toDegrees(follower.getPose().getHeading()));
         joinedTele.addData("drive", ROBOT_CENTRIC ? "ROBOT CENTRIC" : "FIELD CENTRIC");
         joinedTele.addData("fieldForward", FIELD_FORWARD_DEG);
+        joinedTele.addData("reseeded", lastReseed);
         joinedTele.addData("shooterOn", shooterOn);
         joinedTele.addData("autoTurret", autoTurret);
         joinedTele.addData("autoShooter", autoShooter);

@@ -496,6 +496,54 @@ public class AutoAimSubsystem {
         turret.setPower(Range.clip(TURRET_POWER_SIGN * turretPower, -TURRET_MAX_POWER, TURRET_MAX_POWER));
     }
 
+    /**
+     * DEVIATION from 32008's file, and the only one in this class beyond the imports.
+     *
+     * Cuts turret power WITHOUT touching any filter, timer or last-command state, so
+     * update() can resume next loop as if nothing happened. stop() cannot be used for
+     * this -- it tears down the filters, and re-initialising them mid-volley makes the
+     * turret jump when aiming resumes.
+     *
+     * WHY IT EXISTS: their turret feedforward applies static friction as a bang-bang
+     * term --
+     *     ksSign = |finalTargetVel| > 0.5 ? signum(finalTargetVel) : 0
+     *     power  = accel*kA + finalTargetVel*kV + ksSign*kS
+     * With kP = 12, an error of only 0.042 deg pushes finalTargetVel past 0.5, and
+     * commanded power then jumps ~38x (0.00078 -> 0.0298) and flips sign with the
+     * error. The turret cannot settle; it limit-cycles left and right forever. Their
+     * teleop lives with it because a driver never waits on a still turret. An
+     * autonomous that stops and shoots does, so the auto parks the turret once aimed
+     * rather than letting it hunt through the shot.
+     */
+    public void holdTurret() {
+        turret.setPower(0.0);
+    }
+
+    /**
+     * SECOND DEVIATION from 32008's file. Re-seeds the heading/rotation filter from
+     * the live pose on the next update(), leaving turret and chassis filters alone.
+     *
+     * WHY: the turret's rotation feedforward is -filteredRobotOmega, and that value is
+     * a LAGGING estimate --
+     *     filteredRobotOmega += OMEGA_FILTER_ALPHA * (robotAngularVelocityDeg - filteredRobotOmega)
+     * with alpha 0.7. Fine while the chassis rotates steadily. Not fine when a leg
+     * ends a fast spin abruptly: the estimate keeps commanding the turret to
+     * counter-rotate against a rotation that has already stopped. At kV = 0.001593 a
+     * stale 260 deg/s is 0.41 of turret power, which then feeds the kS limit cycle
+     * described on holdTurret() and the turret hunts left/right.
+     *
+     * 260 deg/s is not hypothetical -- BlueCloseAuto's preload leg turns 177 deg in
+     * 20.4 in (8.68 deg/in, 5.7x any other leg on that path), so it arrives spinning
+     * that hard. The other three legs turn 40-50 deg over 33-84 in and never provoke
+     * this, which is exactly the reported symptom: only the preload wobbles.
+     *
+     * Calling this when the robot stops to shoot snaps the estimate to the true,
+     * now-near-zero rate instead of letting it decay through the whole volley.
+     */
+    public void resetHeadingFilter() {
+        isSmoothHeadingInit = false;
+    }
+
     public void stop() {
         turret.setPower(0.0);
         isTurretFilterInitialized = false;
