@@ -212,7 +212,7 @@ public class BlueCloseAuto extends OpMode {
      * and the preload still wobbled, because the wobble was never about how long the
      * robot waited: followPath ran with holdEnd = true, so the chassis stayed under
      * active PIDF correction for the whole "wait". Waiting longer only wobbled longer.
-     * The chassis is now genuinely parked first (see holdStill), AutoAim converges
+     * The chassis is now genuinely parked first (see parkChassis), AutoAim converges
      * against a stationary base, and this is the extra hold on top of the lock.
      *
      * 0.2 on the preload is the driver's number under the new sequence. Shot 3's 0.3
@@ -230,10 +230,12 @@ public class BlueCloseAuto extends OpMode {
      *
      * This is the term that was missing, and it is why waiting longer never fixed the
      * preload wobble. pathDone() fires on atParametricEnd(), i.e. t > 0.99 -- the
-     * robot is still MOVING when the leg is declared over. holdStill() then cuts the
-     * drive command, but cutting power does not stop a robot, it lets it coast. So
+     * robot is still MOVING when the leg is declared over. The original park then cut
+     * the drive command, but cutting power does not stop a robot, it lets it coast. So
      * the volley was starting during the coast-down: AutoAim was tracking a chassis
      * that was still drifting, the turret chased it, and the shot went off into that.
+     * parkChassis() plus the re-anchor in shotComplete() phase 1 close both halves of
+     * that -- see parkChassis() for why the old park made it worse, not just weaker.
      *
      * Nothing was checking. Now readyToFire() will not return true until the measured
      * translational AND angular speeds are both under these, so the settle clock
@@ -330,6 +332,8 @@ public class BlueCloseAuto extends OpMode {
     private boolean wasReady = false;
     /** True once the turret has been parked for this volley. See FREEZE_TURRET_ON_LOCK. */
     private boolean turretFrozen = false;
+    /** One re-anchor per volley, at the first loop the chassis actually reads still. */
+    private boolean anchored = false;
 
     private int shotPhase = 0;
     private int shotsFired = 0;
@@ -597,15 +601,54 @@ public class BlueCloseAuto extends OpMode {
     }
 
     /**
-     * Hands the drivetrain to manual control with a zero command and BRAKE zero-power,
-     * so the chassis is genuinely parked rather than being held by the path PIDF.
+     * Parks the drivetrain on Pedro's own position hold, at the pose the robot is
+     * actually standing on right now. Ported from BlueFarAuto after the same wobble
+     * was traced there; this file had the identical bug.
      *
-     * Called once on entering a volley, then re-asserted every loop of it -- cheap,
-     * and it means a stray path update cannot quietly take the wheels back.
+     * THE OLD startTeleopDrive + ZERO-VECTOR PARK WAS ITSELF A WOBBLE SOURCE. Read
+     * Follower.update() (core 2.1.2): the manualDrive branch runs
+     *
+     *     drivetrain.runDrive(getCentripetalForceCorrection(),
+     *                         getTeleopHeadingVector(),
+     *                         getTeleopDriveVector(), ...)
+     *
+     * with NO translational correction at all -- so a zero teleop vector leaves the
+     * chassis with no position feedback whatsoever -- and it still applies centripetal.
+     * VectorCalculator.getCentripetalForceCorrection() in teleop mode computes
+     *
+     *     yPrime       = averageVelocity.y / averageVelocity.x
+     *     yDoublePrime = averageAcceleration.y / averageVelocity.x
+     *     curvature    = yDoublePrime / (sqrt(1 + yPrime^2))^3
+     *
+     * At a standstill averageVelocity.x is sensor noise near zero. Exact 0/0 gives NaN
+     * and is guarded; a TINY NONZERO x is not, and curvature explodes. That feeds
+     *
+     *     clamp(centripetalScaling * mass * v_tangential^2 * curvature, +/-maxPower)
+     *
+     * which saturates to FULL SIDEWAYS POWER, aimed along the stale previous path's
+     * tangent, sign flipping as noise flips the acceleration estimate -- every loop.
+     * So the note above about BRAKE zero-power was true and still not enough: brake
+     * resists coasting, but nothing resists a commanded full-power kick.
+     *
+     * The holdingPosition branch of the same update() runs
+     *
+     *     drivetrain.runDrive(getTranslationalCorrection() * holdPointTranslationalScaling,
+     *                         getHeadingVector() * holdPointHeadingScaling,
+     *                         new Vector(), ...)
+     *
+     * -- real translational and heading correction, softened by Pedro's own 0.45/0.35
+     * hold scalings, and NO centripetal term. It is the mode Pedro itself enters at the
+     * end of a followPath(holdEnd = true), so this is the library's intended park.
+     *
+     * Holds the CURRENT pose, not the shoot pose: least motion possible, and AutoAim
+     * solves from live pose every loop so arrival error costs nothing in aim.
+     *
+     * Call ONCE per volley (plus the one re-anchor below). holdPoint() re-snapshots its
+     * target and re-runs breakFollowing() on every call, so calling it each loop would
+     * drag the hold target along behind the robot.
      */
-    private void holdStill() {
-        follower.startTeleopDrive(true);
-        follower.setTeleOpDrive(0.0, 0.0, 0.0, true);
+    private void parkChassis() {
+        follower.holdPoint(follower.getPose());
     }
 
     /**
@@ -617,11 +660,10 @@ public class BlueCloseAuto extends OpMode {
      * volley's worth of hesitation instead of the rest of the auto.
      */
     private boolean shotComplete(double settle) {
-        // Re-assert the zero drive command for every loop of the volley. holdStill()
-        // set the mode on phase 0; this keeps the commanded vector at zero.
-        if (shotPhase != 0) {
-            follower.setTeleOpDrive(0.0, 0.0, 0.0, true);
-        }
+        // No per-loop re-assert any more. parkChassis() installs Pedro's holdingPosition
+        // mode and follower.update() maintains it for the rest of the volley; nothing in
+        // this method clears it. The old re-assert kept re-sending a zero teleop vector,
+        // and that whole park is gone.
         if (stateTimer.getElapsedTimeSeconds() > SHOOT_TIMEOUT) {
             intake.gateClose();
             shotPhase = 0;
@@ -640,11 +682,11 @@ public class BlueCloseAuto extends OpMode {
                 // settle time never fixed that, because nothing was ever asking the
                 // drivetrain to stop. This does.
                 //
-                // startTeleopDrive(true) = BRAKE zero-power behaviour, not FLOAT, so
-                // the motors resist motion instead of coasting. Nothing needs undoing
-                // afterwards: followPath() calls breakFollowing() internally, which
-                // clears manualDrive on its own when the next leg starts.
-                holdStill();
+                // parkChassis() uses Pedro's own holdPoint(), which is the only mode
+                // that actually corrects position AND applies no centripetal term.
+                // Nothing needs undoing afterwards: followPath() calls breakFollowing()
+                // internally, which clears the hold when the next leg starts.
+                parkChassis();
                 // Drop the stale rotation estimate. The chassis has just stopped; the
                 // turret must not keep counter-rotating against the spin it arrived
                 // with. Matters most on the preload, whose leg turns 177 deg in 20.4 in
@@ -656,11 +698,38 @@ public class BlueCloseAuto extends OpMode {
                 settleTimer.resetTimer();
                 wasReady = false;
                 turretFrozen = false;
+                anchored = false;
                 shotPhase = 1;
                 lastTransition = "shot: chassis held, gate opening";
                 return false;
 
             case 1: {
+                // RE-ANCHOR AT TRUE REST, once per volley. Phase 0 has to run while the
+                // robot is still moving -- pathDone() triggers at atParametricEnd() and
+                // the path PIDF has to be killed right then -- so both the hold point
+                // and the rotation filter get captured mid-coast.
+                //
+                //   CHASSIS: holdPoint() latched the pose the robot was passing through,
+                //     not the one it stops at, then drags it back that far. Visible
+                //     motion during the volley. Re-anchoring at rest leaves the hold
+                //     with zero standing error, so it has nothing to pull against.
+                //
+                //   TURRET: resetHeadingFilter() re-seeded off a robot that was still
+                //     turning, so the filter starts holding a rotation rate that no
+                //     longer exists and AutoAim feeds it to the turret as
+                //     -filteredRobotOmega. On THIS path that is worst on the preload,
+                //     whose leg turns 177 deg in 20.4 in -- 5.7x the rotation rate of
+                //     any other leg here, and the exact shot that kept wobbling.
+                //
+                // Checked BEFORE the gate-travel hold below, so it fires the instant the
+                // robot is actually still rather than waiting on the servo.
+                if (!anchored && chassisStopped()) {
+                    anchored = true;
+                    parkChassis();
+                    autoAim.resetHeadingFilter();
+                    lastTransition = "shot: re-anchored at rest (chassis + heading filter)";
+                }
+
                 // Gate must have physically travelled first -- nothing senses it.
                 if (shotTimer.getElapsedTime() < GATE_TRAVEL_MS) {
                     return false;
@@ -678,7 +747,16 @@ public class BlueCloseAuto extends OpMode {
                     lastTransition = "shot: LOCKED, turret parked, settling " + settle + "s";
                 } else if (!ready && wasReady) {
                     wasReady = false;
-                    lastTransition = "shot: lock LOST, settle restarts";
+                    // HAND THE TURRET BACK. updateAim() early-returns while turretFrozen
+                    // is set, so the whole `aim` struct stops updating -- target angle,
+                    // lock flag, rpm, all frozen at the values from the instant of lock.
+                    // If the chassis then moved, the turret is holding a solution for a
+                    // pose the robot has left, and readyToFire() re-reads that same
+                    // stale lock as soon as the chassis settles: it re-freezes,
+                    // re-settles, and fires at the OLD aim point. Clearing the freeze
+                    // forces a live re-solve before the shot can arm again.
+                    turretFrozen = false;
+                    lastTransition = "shot: lock LOST, turret released, settle restarts";
                 }
 
                 boolean settled = wasReady && settleTimer.getElapsedTimeSeconds() >= settle;
