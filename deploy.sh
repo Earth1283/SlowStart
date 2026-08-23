@@ -11,7 +11,7 @@
 
 cd "$(dirname "$0")" || exit 1
 ADB=/Users/georgehu/Library/Android/sdk/platform-tools/adb
-LOG=deploy-log.txt
+LOG=/dev/null
 
 {
   echo "===== 32008 deploy log ====="
