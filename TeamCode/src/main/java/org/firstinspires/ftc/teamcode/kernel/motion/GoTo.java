@@ -42,7 +42,6 @@ public class GoTo {
     /**
      * Raw-double overload of {@link #goTo(Pose, Pose)}; wraps the coordinates into
      * {@link Pose} instances and delegates. Here to maintain legacy compatibility
-     * Parameters are self-documenting.
      */
     public void goTo(double currentX, double currentY, double currentHdg,
                      double targetX, double targetY, double targetHdg) throws InvalidCoordinates {
